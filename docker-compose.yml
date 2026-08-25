@@ -1,0 +1,13 @@
+services:
+  compiscript:
+    build: .
+    volumes:
+      - .:/app
+      # Cache del repositorio de Maven, para no volver a descargar en cada arranque.
+      - maven-repo:/root/.m2
+    working_dir: /app
+    stdin_open: true
+    tty: true
+
+volumes:
+  maven-repo:

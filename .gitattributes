@@ -1,0 +1,8 @@
+* text=auto
+
+# Scripts que se ejecutan dentro del contenedor Linux: siempre LF,
+# de lo contrario `/bin/sh^M: bad interpreter` al clonar en Windows.
+*.sh       text eol=lf
+mvnw       text eol=lf
+Dockerfile text eol=lf
+*.yml      text eol=lf
