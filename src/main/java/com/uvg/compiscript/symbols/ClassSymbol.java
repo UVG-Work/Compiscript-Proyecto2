@@ -1,14 +1,15 @@
 package com.uvg.compiscript.symbols;
 
 import com.uvg.compiscript.types.ClassType;
+import org.antlr.v4.runtime.Token;
 
 public class ClassSymbol extends Symbol {
 
     private ClassSymbol parent;
     private Scope memberScope;
 
-    public ClassSymbol(String name, ClassType type, int line, int column) {
-        super(name, type, line, column);
+    public ClassSymbol(String name, ClassType type, Token declaration) {
+        super(name, type, declaration);
     }
 
     public ClassType getClassType() {

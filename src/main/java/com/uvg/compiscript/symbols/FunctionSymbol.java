@@ -2,17 +2,26 @@ package com.uvg.compiscript.symbols;
 
 import com.uvg.compiscript.types.Type;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import org.antlr.v4.runtime.Token;
 
 public class FunctionSymbol extends Symbol {
 
     private final List<ParameterSymbol> parameters = new ArrayList<>();
+    private final Set<String> captures = new LinkedHashSet<>();
     private Type returnType;
     private Scope bodyScope;
     private ClassSymbol owner;
 
-    public FunctionSymbol(String name, int line, int column) {
-        super(name, null, line, column);
+    public FunctionSymbol(String name, Token declaration) {
+        super(name, null, declaration);
+    }
+
+    /** Numero de parametros. */
+    public int getArity() {
+        return parameters.size();
     }
 
     public List<ParameterSymbol> getParameters() {
@@ -21,6 +30,11 @@ public class FunctionSymbol extends Symbol {
 
     public void addParameter(ParameterSymbol parameter) {
         parameters.add(parameter);
+    }
+
+    /** Nombres que la funcion toma de un ambito de funcion exterior. No vacio = closure. */
+    public Set<String> getCaptures() {
+        return captures;
     }
 
     public Type getReturnType() {

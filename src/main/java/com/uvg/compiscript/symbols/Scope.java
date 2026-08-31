@@ -37,6 +37,7 @@ public class Scope {
             return false;
         }
         symbols.put(symbol.getName(), symbol);
+        symbol.setScope(this);
         if (symbol.getType() != null) {
             symbol.setOffset(size);
             size += symbol.getType().size();
@@ -58,6 +59,26 @@ public class Scope {
             }
         }
         return null;
+    }
+
+    /** Devuelve el ambito donde vive el nombre, no el simbolo. Hace falta para
+     *  decidir si un uso es una captura. */
+    public Scope scopeOf(String name) {
+        for (Scope scope = this; scope != null; scope = scope.parent) {
+            if (scope.symbols.containsKey(name)) {
+                return scope;
+            }
+        }
+        return null;
+    }
+
+    /** Profundidad de anidamiento: 0 es el ambito global. */
+    public int getDepth() {
+        int depth = 0;
+        for (Scope scope = parent; scope != null; scope = scope.parent) {
+            depth++;
+        }
+        return depth;
     }
 
     /** El ambito de funcion que contiene a este, o null si no hay ninguno. */
@@ -103,15 +124,35 @@ public class Scope {
 
     private void dump(StringBuilder sb, int depth) {
         String indent = "  ".repeat(depth);
-        sb.append(String.format("%s[%s] %s (%d bytes)%n", indent, kind, name, size));
+        sb.append(String.format("%s[%s] %s (profundidad %d, %d bytes)%n",
+                indent, kind, name, depth, size));
+        if (symbols.isEmpty()) {
+            sb.append(indent).append("  (vacio)").append(System.lineSeparator());
+        }
         for (Symbol symbol : symbols.values()) {
-            sb.append(String.format("%s  %-8s %-14s %-14s linea %d, offset %d%n",
+            sb.append(String.format("%s  %-8s %-14s %-22s %-11s %d:%-3d alcance %d  offset %-4d%s%n",
                     indent, symbol.getKind(), symbol.getName(), symbol.getType(),
-                    symbol.getLine(), symbol.getOffset()));
+                    symbol.getTokenName(), symbol.getLine(), symbol.getColumn(),
+                    symbol.getScopeDepth(), symbol.getOffset(), extras(symbol)));
         }
         for (Scope child : children) {
             child.dump(sb, depth + 1);
         }
+    }
+
+    private static String extras(Symbol symbol) {
+        if (symbol instanceof FunctionSymbol function) {
+            String extra = "  " + function.getArity() + " param";
+            return function.getCaptures().isEmpty()
+                    ? extra : extra + ", captura " + function.getCaptures();
+        }
+        if (symbol instanceof ParameterSymbol parameter) {
+            return "  por " + parameter.getPassingMode().name().toLowerCase();
+        }
+        if (symbol instanceof VariableSymbol variable && variable.isCaptured()) {
+            return "  capturada";
+        }
+        return "";
     }
 
     @Override

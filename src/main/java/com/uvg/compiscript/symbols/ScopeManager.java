@@ -11,6 +11,11 @@ public class ScopeManager {
         return current;
     }
 
+    /** Vuelve a entrar a un ambito ya creado (el de miembros de una clase). */
+    public void enter(Scope scope) {
+        current = scope;
+    }
+
     public void pop() {
         if (current.getParent() != null) {
             current = current.getParent();
