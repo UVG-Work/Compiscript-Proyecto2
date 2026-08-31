@@ -6,3 +6,11 @@ target/
 *.iml
 .vscode/
 .DS_Store
+
+# Arboles exportados con --dot
+*_arbol.dot
+*_arbol.png
+
+# Material del curso: no es entregable del proyecto
+docs/*.pptx
+docs/*.pdf
