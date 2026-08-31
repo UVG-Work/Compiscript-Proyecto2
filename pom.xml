@@ -25,6 +25,32 @@
       <artifactId>antlr4-runtime</artifactId>
       <version>${antlr.version}</version>
     </dependency>
+
+    <!-- El jar de la herramienta ANTLR trae org.antlr.v4.gui.TreeViewer, que el
+         IDE usa para dibujar el arbol. De sus dependencias solo hace falta
+         abego.treelayout: ninguna clase de org/antlr/v4/gui toca icu4j. -->
+    <dependency>
+      <groupId>org.antlr</groupId>
+      <artifactId>antlr4</artifactId>
+      <version>${antlr.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.ibm.icu</groupId>
+          <artifactId>icu4j</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.twdata.maven</groupId>
+          <artifactId>mojo-executor</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <!-- Editor con resaltado de sintaxis y numeros de linea. Sin dependencias. -->
+    <dependency>
+      <groupId>com.fifesoft</groupId>
+      <artifactId>rsyntaxtextarea</artifactId>
+      <version>3.6.3</version>
+    </dependency>
   </dependencies>
 
   <build>
@@ -68,6 +94,17 @@
             </goals>
             <configuration>
               <createDependencyReducedPom>false</createDependencyReducedPom>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>module-info.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>com.uvg.compiscript.Main</mainClass>
