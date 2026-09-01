@@ -1175,7 +1175,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
                 || array.getKnownLength() < 0) {
             return;
         }
-        int value = literalInteger(index.expression());
+        long value = literalInteger(index.expression());
         if (value >= array.getKnownLength()) {
             reporter.error(index, LISTAS, "indice fuera de rango: '" + array.getName()
                     + "' tiene " + array.getKnownLength() + " elemento(s)");
@@ -1321,13 +1321,23 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
         return -1;
     }
 
-    private static int literalInteger(CompiscriptParser.ExpressionContext ctx) {
+    /**
+     * Se devuelve long, no int: un literal como {@code lista[99999999999999999999]}
+     * no cabe en un int y {@code Integer.parseInt} tumbaba el analizador entero.
+     *
+     * @return -1 si el indice no es una constante entera.
+     */
+    private static long literalInteger(CompiscriptParser.ExpressionContext ctx) {
         ParseTree node = unwrapSingleChild(ctx);
         if (node instanceof CompiscriptParser.LiteralExprContext literal
                 && literal.Literal() != null) {
             String text = literal.Literal().getText();
             if (!text.isEmpty() && text.chars().allMatch(Character::isDigit)) {
-                return Integer.parseInt(text);
+                try {
+                    return Long.parseLong(text);
+                } catch (NumberFormatException tanGrandeQueNiEnLongCabe) {
+                    return Long.MAX_VALUE;
+                }
             }
         }
         return -1;

@@ -71,8 +71,17 @@ public final class TestRunner {
                 continue;
             }
 
-            Outcome outcome = analyze(file);
-            String problem = compare(testCase.expectation(), outcome);
+            Outcome outcome;
+            String problem;
+            try {
+                outcome = analyze(file);
+                problem = compare(testCase.expectation(), outcome);
+            } catch (RuntimeException crash) {
+                // Un caso que tumba al analizador no debe abortar la bateria:
+                // se reporta como fallo y se sigue con los demas.
+                outcome = new Outcome(0, 0, List.of(crash.toString()));
+                problem = "el analizador reviento: " + crash;
+            }
             if (problem == null) {
                 out.printf("  ok       %-28s %s%n", file.getFileName(), testCase.expectation());
                 passed++;

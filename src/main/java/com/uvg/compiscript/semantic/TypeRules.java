@@ -20,8 +20,17 @@ public final class TypeRules {
     private TypeRules() {
     }
 
+    /**
+     * Una lista de errores tambien es un error. Sin mirar dentro del
+     * {@link ArrayType}, {@code [1, [2]]} o {@code Desconocido[]} valen
+     * {@code <error>[]}, que no es {@code ErrorType}, y el sumidero deja pasar
+     * un segundo mensaje derivado del primero.
+     */
     public static boolean isError(Type type) {
-        return type == null || type instanceof ErrorType;
+        if (type == null || type instanceof ErrorType) {
+            return true;
+        }
+        return type instanceof ArrayType array && isError(array.getElementType());
     }
 
     /** Tipos que admiten {@code null}. */
