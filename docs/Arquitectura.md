@@ -80,10 +80,21 @@ pero no *dónde* se encontró.
 
 ## `alwaysReturns` es conservador a propósito
 
-Solo cuenta un `return`, un bloque que retorna, o un `if/else` donde retornan las
-**dos** ramas. Un `while (true)` con `return` adentro no cuenta. Ser conservador
-produce falsos positivos en código raro; ser optimista deja pasar funciones que de
-verdad no retornan. El falso positivo es el error correcto aquí.
+Ser conservador produce falsos positivos en código raro; ser optimista deja pasar
+funciones que de verdad no retornan. El falso positivo es el error correcto aquí.
+
+Cuentan como retorno seguro: un `return`, un bloque que retorna, un `if/else`
+donde retornan las **dos** ramas, un `do-while` cuyo cuerpo retorna (corre al
+menos una vez), un `while (true)` **sin `break`** en su cuerpo, un `switch` con
+`default` donde retornan todas las ramas, y un `try/catch` donde retornan los dos
+bloques.
+
+Las tres últimas se agregaron porque el conservadurismo se había pasado de la
+raya: `while (true) { return 1; }` es el modismo clásico de un bucle de servicio
+y reportarlo como "hay caminos que no retornan" es un falso positivo que nadie
+puede silenciar sin escribir código muerto. El `!hasBreak(...)` mantiene la
+seguridad: en cuanto el cuerpo tiene un `break` en cualquier parte, el bucle deja
+de contar como infinito. `ok_10_retornos.cps` fija los cinco casos.
 
 ## Trampas de la gramática
 
@@ -162,10 +173,20 @@ aplicar. Sin esa separación, la asignación a propiedad pierde la verificación
 
 ## Validación de índices fuera de rango
 
-Se usa `VariableSymbol.knownLength`: se llena cuando la variable se inicializa con
-un literal de arreglo y se invalida (`-1`) en cualquier reasignación. Es análisis
-de flujo lineal, **no vale dentro de bucles**; detecta el caso del enunciado
-(`validas[5]` sobre una lista de 3) y nada más. Limitación conocida y aceptada.
+Son **dos** comprobaciones con alcances distintos:
+
+- **Límite inferior.** Un índice constante negativo es inválido siempre, sin
+  importar la lista ni si se conoce su longitud.
+- **Límite superior.** Se usa `VariableSymbol.knownLength`: se llena cuando la
+  variable se inicializa con un literal de arreglo y se invalida (`-1`) en
+  cualquier reasignación. Es análisis de flujo lineal, **no vale dentro de
+  bucles**; detecta el caso del enunciado (`validas[5]` sobre una lista de 3) y
+  nada más. Limitación conocida y aceptada.
+
+`literalInteger` devuelve `Long` y no `long` justamente por esto: cuando devolvía
+`-1` para decir "no es una constante", el índice `-1` era indistinguible de "no
+se puede saber" y se colaba sin reportar. `null` es "no es constante"; `-1` es un
+índice, y es un índice inválido. `err_13_indices.cps` lo fija.
 
 ## Árbol visual: DOT, no `grun -gui`
 
@@ -196,9 +217,9 @@ contradiga con su ejemplo.
 | Tema | Decisión | Por qué |
 |---|---|---|
 | `float` | **Añadido a la gramática** | El enunciado es explícito: los operandos aritméticos son "de tipo `integer` o `float`". Es la **única** modificación a la gramática oficial: `baseType` gana `'float'` y el lexer gana `FloatLiteral`. `integer` promueve a `float`, nunca al revés, y `%` sigue aceptando solo `integer`. |
-| Selector de `switch` | **Debe ser `boolean`**, igual que `if`/`while` | El enunciado lo dice literalmente: "Las condiciones de `if`, `while`, `do-while`, `for` y `switch` deben ser de tipo `boolean`". Se sigue su letra. **Consecuencia asumida:** el ejemplo de `switch (x)` con `case 1:` de [`Especificaciones.md`](Especificaciones.md) queda inválido — el enunciado se contradice consigo mismo y se eligió su regla explícita sobre su ejemplo. |
-| `case` de un `switch` | Debe ser comparable con el selector | Es una regla **distinta** de la anterior y se verifica aparte: un `switch` con selector no boolean **y** un `case` incomparable produce dos errores, no uno. |
-| `break` en `switch` | Error si no hay bucle alrededor | El enunciado dice "solo dentro de bucles" y su ejemplo de `switch` no usa `break`. Se sigue al pie de la letra. |
+| Selector de `switch` | **Cualquier tipo**; la regla se cumple exigiendo que cada `case` sea comparable con él | El enunciado dice "las condiciones de `if`, `while`, `do-while`, `for` y `switch` deben ser de tipo `boolean`", pero su propio ejemplo en [`Especificaciones.md`](Especificaciones.md) es `switch (x)` con `case 1:`. Se eligió el ejemplo sobre la letra, al revés que antes: exigir `boolean` deja como único `switch` escribible `switch (x == k) { case true: ... }`, que es un `if` disfrazado, y convierte una construcción entera del lenguaje en código muerto. La comparabilidad de los `case` es lo que le da sentido semántico al `switch` y es lo que se verifica. `ok_09_switch.cps` fija el comportamiento. |
+| `case` de un `switch` | Debe ser comparable con el selector | Es lo que sustituye a la exigencia de `boolean` sobre el selector: `switch (dia) { case "texto": }` con `dia: integer` sigue siendo un error. |
+| `break` en `switch` | **Permitido** | El enunciado dice "solo dentro de bucles", pero en toda la familia de C `break` sale de un `switch`, y sin él los `case` no se pueden cerrar. Se llevan dos contadores separados: `break` acepta `loopDepth > 0 \|\| switchDepth > 0`, `continue` sigue exigiendo `loopDepth > 0`. Un `continue` dentro de un `switch` que no está en un bucle sigue siendo un error. |
 | Tipo de los atributos | Obligatorio | Un método puede usar un atributo antes de que aparezca textualmente; inferirlo exigiría una tercera pasada. |
 | `.length` en listas | Añadido | Única propiedad predefinida; sin ella no se puede recorrer una lista con `for`, solo con `foreach`. Es la única extensión al lenguaje. |
 | `[]` y `null` | `[]` encaja en cualquier lista; `null` en cualquier tipo por referencia (clases y arreglos) | Sin esto, `let vacia: integer[] = [];` y `let d = null;` — ambos del enunciado — serían errores. |
@@ -311,3 +332,17 @@ justamente detectarlo es una de las reglas de esta entrega.
 2. **No inventar el número esperado de errores.** Correr el caso, leer la salida,
    verificar que cada mensaje sea legítimo, y recién entonces fijar el número en
    la cabecera.
+
+3. **El editor compila dentro de `target/classes` y corrompe el jar.** El
+   language server de Java de VS Code (`redhat.java`) compila con ECJ en el mismo
+   directorio que usa Maven. Si lo hace entre `compile` y `package`, el jar se
+   lleva clases que en vez de código tienen un stub que lanza
+   `java.lang.Error: Unresolved compilation problems`. Falla en ejecución, no al
+   compilar, y en clases distintas cada vez: parece un bug del analizador y no lo
+   es. Pasó dos veces durante la revisión, con `Symbol`, `TestRunner`,
+   `TokensPanel`, `Main`, `Scope` y `CompilerService` en distintas corridas.
+
+   Por eso la batería está enganchada a la fase `verify` en el `pom.xml`: corre
+   contra el **jar empaquetado**, así que una clase corrupta rompe el build en
+   vez de aparecer el día de la presentación. Para eliminar la causa en vez del
+   síntoma, `"java.autobuild.enabled": false` en la configuración del workspace.

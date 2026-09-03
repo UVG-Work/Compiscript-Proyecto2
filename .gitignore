@@ -5,6 +5,7 @@ target/
 .idea/
 *.iml
 .vscode/
+.memsearch/
 .DS_Store
 
 # Arboles exportados con --dot

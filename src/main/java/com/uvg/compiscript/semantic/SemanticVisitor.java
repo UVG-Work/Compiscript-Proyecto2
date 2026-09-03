@@ -54,7 +54,13 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
     private final Deque<FunctionSymbol> functions = new ArrayDeque<>();
     private final Deque<ClassSymbol> classes = new ArrayDeque<>();
     private final Map<ClassType, ClassSymbol> classSymbols = new HashMap<>();
+    // Indexado por contexto y no por nombre: de una funcion redeclarada solo la
+    // primera queda en el ambito, pero cada cuerpo debe verificarse contra su
+    // propia firma.
+    private final Map<CompiscriptParser.FunctionDeclarationContext, FunctionSymbol>
+            functionSymbols = new HashMap<>();
     private int loopDepth;
+    private int switchDepth;
     private int blockCounter;
 
     public ErrorReporter getReporter() {
@@ -241,6 +247,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
         }
         symbol.setReturnType(returnType);
         symbol.setType(new FunctionType(parameterTypes, returnType));
+        functionSymbols.put(ctx, symbol);
 
         if (!scopes.define(symbol)) {
             reporter.error(ctx, owner == null ? AMBITO : CLASES,
@@ -321,9 +328,11 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
 
     @Override
     public Type visitFunctionDeclaration(CompiscriptParser.FunctionDeclarationContext ctx) {
-        // El simbolo ya lo creo hoist(); aqui solo se verifica el cuerpo.
-        if (scopes.current().resolveLocal(ctx.Identifier().getText())
-                instanceof FunctionSymbol symbol) {
+        // El simbolo ya lo creo hoist(); aqui solo se verifica el cuerpo. Se
+        // busca por contexto: resolver por nombre devolveria el simbolo de la
+        // primera declaracion y verificaria este cuerpo contra sus parametros.
+        FunctionSymbol symbol = functionSymbols.get(ctx);
+        if (symbol != null) {
             checkFunctionBody(ctx, symbol);
         }
         return PrimitiveType.VOID;
@@ -352,11 +361,14 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
         symbol.getParameters().addAll(declared);
 
         functions.push(symbol);
-        // Una funcion anidada dentro de un bucle no puede romper ese bucle.
+        // Una funcion anidada dentro de un bucle o un switch no puede romperlos.
         int savedLoop = loopDepth;
+        int savedSwitch = switchDepth;
         loopDepth = 0;
+        switchDepth = 0;
         visitStatementList(ctx.block().statement());
         loopDepth = savedLoop;
+        switchDepth = savedSwitch;
         functions.pop();
 
         Type returnType = symbol.getReturnType();
@@ -371,9 +383,13 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
     }
 
     /**
-     * Conservador a proposito: solo cuenta un {@code return}, un bloque que
-     * retorna, o un {@code if/else} donde retornan las dos ramas. Preferimos el
-     * falso positivo a dejar pasar una funcion que de verdad no retorna.
+     * Conservador a proposito: preferimos el falso positivo a dejar pasar una
+     * funcion que de verdad no retorna. Cuentan un {@code return}, un bloque que
+     * retorna, un {@code if/else} donde retornan las dos ramas, un
+     * {@code do-while} cuyo cuerpo retorna (corre al menos una vez), un bucle
+     * infinito sin {@code break}, un {@code switch} con {@code default} donde
+     * retornan todas las ramas, y un {@code try/catch} donde retornan los dos
+     * bloques.
      */
     private boolean alwaysReturns(List<CompiscriptParser.StatementContext> statements) {
         for (CompiscriptParser.StatementContext statement : statements) {
@@ -396,6 +412,54 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
             return ifStatement.block().size() == 2
                     && alwaysReturns(ifStatement.block(0).statement())
                     && alwaysReturns(ifStatement.block(1).statement());
+        }
+        if (statement.doWhileStatement() != null) {
+            // El cuerpo de un do-while corre al menos una vez.
+            return alwaysReturns(statement.doWhileStatement().block().statement());
+        }
+        if (statement.whileStatement() != null) {
+            // `while (true)` sin `break` no cae nunca por debajo del bucle, asi
+            // que lo que siga es inalcanzable y la funcion si retorna siempre.
+            CompiscriptParser.WhileStatementContext loop = statement.whileStatement();
+            return "true".equals(loop.expression().getText()) && !hasBreak(loop.block());
+        }
+        if (statement.switchStatement() != null) {
+            return switchReturns(statement.switchStatement());
+        }
+        if (statement.tryCatchStatement() != null) {
+            CompiscriptParser.TryCatchStatementContext tryCatch = statement.tryCatchStatement();
+            return alwaysReturns(tryCatch.block(0).statement())
+                    && alwaysReturns(tryCatch.block(1).statement());
+        }
+        return false;
+    }
+
+    /** Sin {@code default} siempre queda el camino que no entra a ningun case. */
+    private boolean switchReturns(CompiscriptParser.SwitchStatementContext ctx) {
+        if (ctx.defaultCase() == null) {
+            return false;
+        }
+        for (CompiscriptParser.SwitchCaseContext switchCase : ctx.switchCase()) {
+            if (!alwaysReturns(switchCase.statement())) {
+                return false;
+            }
+        }
+        return alwaysReturns(ctx.defaultCase().statement());
+    }
+
+    /**
+     * Un {@code break} en cualquier parte del subarbol. Conservador: uno que
+     * pertenece a un bucle anidado tambien cuenta, y a lo sumo eso exige un
+     * {@code return} de mas.
+     */
+    private static boolean hasBreak(ParseTree node) {
+        if (node instanceof CompiscriptParser.BreakStatementContext) {
+            return true;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            if (hasBreak(node.getChild(i))) {
+                return true;
+            }
         }
         return false;
     }
@@ -454,10 +518,11 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
             }
         }
         for (CompiscriptParser.ClassMemberContext member : ctx.classMember()) {
-            if (member.functionDeclaration() != null
-                    && scopes.current().resolveLocal(
-                            member.functionDeclaration().Identifier().getText())
-                    instanceof FunctionSymbol method) {
+            if (member.functionDeclaration() == null) {
+                continue;
+            }
+            FunctionSymbol method = functionSymbols.get(member.functionDeclaration());
+            if (method != null) {
                 checkFunctionBody(member.functionDeclaration(), method);
             }
         }
@@ -661,8 +726,9 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
 
     @Override
     public Type visitBreakStatement(CompiscriptParser.BreakStatementContext ctx) {
-        if (loopDepth == 0) {
-            reporter.error(ctx, CONTROL, "'break' solo puede usarse dentro de un bucle");
+        if (loopDepth == 0 && switchDepth == 0) {
+            reporter.error(ctx, CONTROL,
+                    "'break' solo puede usarse dentro de un bucle o un 'switch'");
         }
         return PrimitiveType.VOID;
     }
@@ -675,10 +741,17 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
         return PrimitiveType.VOID;
     }
 
+    /**
+     * El selector no se exige boolean. La regla del enunciado ("las condiciones
+     * de if, while, do-while, for y switch deben ser de tipo boolean") se cumple
+     * aqui con la comparabilidad de cada {@code case} contra el selector: es lo
+     * que hace que el switch tenga sentido semantico, y exigir boolean dejaria
+     * el unico switch escribible en {@code switch (x == k) case true}.
+     */
     @Override
     public Type visitSwitchStatement(CompiscriptParser.SwitchStatementContext ctx) {
         Type selector = visit(ctx.expression());
-        requireBoolean(selector, ctx.expression(), "switch");
+        switchDepth++;
         for (CompiscriptParser.SwitchCaseContext switchCase : ctx.switchCase()) {
             Type label = visit(switchCase.expression());
             if (!TypeRules.comparable(selector, label)) {
@@ -697,6 +770,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
             reportUnused(scope);
             scopes.pop();
         }
+        switchDepth--;
         return PrimitiveType.VOID;
     }
 
@@ -836,6 +910,15 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
     private Type assignToProperty(Type object, Token token, Type value, ParserRuleContext ctx) {
         String name = token.getText();
         if (TypeRules.isError(object)) {
+            return ERROR;
+        }
+        // Las listas si tienen `length`, solo que de lectura: sin este caso el
+        // mensaje decia que un integer[] "no tiene propiedades", contradiciendo
+        // al acceso de lectura, que si la resuelve.
+        if (object instanceof ArrayType) {
+            reporter.error(token, LISTAS, "length".equals(name)
+                    ? "la propiedad 'length' de una lista es de solo lectura"
+                    : "las listas solo exponen la propiedad 'length', no '" + name + "'");
             return ERROR;
         }
         if (!(object instanceof ClassType classType)) {
@@ -1163,19 +1246,28 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
     }
 
     /**
-     * Rango solo cuando se conoce: la variable se inicializo con un literal de
-     * lista y el indice es una constante. Es analisis lineal, no vale dentro de
-     * un bucle.
+     * Un indice constante negativo es invalido siempre, sin importar la lista.
+     * El limite superior solo se puede comprobar cuando se conoce la longitud, o
+     * sea cuando la variable se inicializo con un literal de lista: es analisis
+     * lineal y no vale dentro de un bucle.
      */
     private void checkIndexRange(CompiscriptParser.LeftHandSideContext ctx, int position,
                                  CompiscriptParser.IndexExprContext index) {
+        Long value = literalInteger(index.expression());
+        if (value == null) {
+            return;
+        }
+        if (value < 0) {
+            reporter.error(index, LISTAS,
+                    "indice fuera de rango: " + value + " es negativo");
+            return;
+        }
         if (position != 0
                 || !(ctx.primaryAtom() instanceof CompiscriptParser.IdentifierExprContext name)
                 || !(scopes.resolve(name.Identifier().getText()) instanceof VariableSymbol array)
                 || array.getKnownLength() < 0) {
             return;
         }
-        long value = literalInteger(index.expression());
         if (value >= array.getKnownLength()) {
             reporter.error(index, LISTAS, "indice fuera de rango: '" + array.getName()
                     + "' tiene " + array.getKnownLength() + " elemento(s)");
@@ -1322,25 +1414,43 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
     }
 
     /**
-     * Se devuelve long, no int: un literal como {@code lista[99999999999999999999]}
+     * Se devuelve Long y no int: un literal como {@code lista[99999999999999999999]}
      * no cabe en un int y {@code Integer.parseInt} tumbaba el analizador entero.
+     * Se satura en vez de desbordar, para que la comparacion de rango siga dando
+     * el mismo veredicto.
      *
-     * @return -1 si el indice no es una constante entera.
+     * <p>El resultado es nullable y no -1: {@code lista[-1]} es un indice
+     * constante perfectamente reconocible y hay que poder distinguirlo de "esto
+     * no es una constante".
+     *
+     * @return null si el indice no es una constante entera.
      */
-    private static long literalInteger(CompiscriptParser.ExpressionContext ctx) {
-        ParseTree node = unwrapSingleChild(ctx);
+    private static Long literalInteger(CompiscriptParser.ExpressionContext ctx) {
+        return literalInteger(unwrapSingleChild(ctx), 1);
+    }
+
+    private static Long literalInteger(ParseTree node, long sign) {
+        // `-1` es un unaryExpr con dos hijos, no un literal: unwrapSingleChild se
+        // detiene ahi y hay que atravesar el signo a mano.
+        if (node instanceof CompiscriptParser.UnaryExprContext unary
+                && unary.primaryExpr() == null) {
+            if (!"-".equals(unary.getChild(0).getText())) {
+                return null;
+            }
+            return literalInteger(unwrapSingleChild(unary.unaryExpr()), -sign);
+        }
         if (node instanceof CompiscriptParser.LiteralExprContext literal
                 && literal.Literal() != null) {
             String text = literal.Literal().getText();
             if (!text.isEmpty() && text.chars().allMatch(Character::isDigit)) {
                 try {
-                    return Long.parseLong(text);
+                    return sign * Long.parseLong(text);
                 } catch (NumberFormatException tanGrandeQueNiEnLongCabe) {
-                    return Long.MAX_VALUE;
+                    return sign > 0 ? Long.MAX_VALUE : Long.MIN_VALUE;
                 }
             }
         }
-        return -1;
+        return null;
     }
 
     private void reportUnused(Scope scope) {

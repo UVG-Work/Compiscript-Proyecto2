@@ -114,6 +114,39 @@
           </execution>
         </executions>
       </plugin>
+      <!-- La bateria corre como parte del build. El enunciado la pide
+           "presente y funcional al momento de la evaluacion", y ademas es la
+           unica red que atrapa un jar empaquetado con clases corruptas: si el
+           language server del editor compila dentro de target/classes mientras
+           Maven empaqueta, el jar sale con stubs que revientan en ejecucion.
+           `verify` corre despues de `package`, asi que prueba el jar que se va
+           a entregar y no el classpath de compilacion.
+
+           Para una compilacion rapida sin pruebas: ./mvnw clean package -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <id>bateria</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>${java.home}/bin/java</executable>
+              <arguments>
+                <argument>-jar</argument>
+                <argument>${project.build.directory}/${project.build.finalName}.jar</argument>
+                <argument>--test</argument>
+                <argument>${project.basedir}/tests</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
     </plugins>
   </build>
 

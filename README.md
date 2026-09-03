@@ -15,11 +15,23 @@ y las decisiones de diseño en [`docs/Arquitectura.md`](docs/Arquitectura.md).
 ## Compilar
 
 ```bash
-./mvnw clean package        # Linux / macOS
-mvnw.cmd clean package      # Windows
+./mvnw clean verify         # Linux / macOS
+mvnw.cmd clean verify       # Windows
 ```
 
-Genera `target/compiscript.jar`, con el runtime de ANTLR incluido.
+Genera `target/compiscript.jar`, con el runtime de ANTLR incluido, y **corre la
+batería de pruebas contra ese jar**: si una regla se rompe o si el jar sale con
+clases corruptas, el build falla en vez de entregar un artefacto malo.
+
+Para una compilación rápida sin pruebas, `clean package`.
+
+> Si el proyecto está abierto en un editor con soporte de Java (VS Code, Eclipse,
+> IntelliJ), su compilador incremental puede escribir en `target/classes` **al
+> mismo tiempo** que Maven empaqueta, y el jar sale con clases a medio compilar
+> que revientan en ejecución con `java.lang.Error: Unresolved compilation
+> problems`. Por eso el build corre la batería contra el jar ya empaquetado: es
+> lo que convierte esa corrupción silenciosa en un fallo visible. Si aparece,
+> basta con repetir `clean verify` con el editor cerrado.
 
 ## Ejecutar
 
@@ -85,7 +97,8 @@ advertencia, de ámbar.
 ## Pruebas
 
 ```bash
-java -jar target/compiscript.jar --test tests
+java -jar target/compiscript.jar --test tests   # a mano
+./mvnw clean verify                             # como parte del build
 ```
 
 Cada `.cps` de [`tests/`](tests/) declara en su cabecera qué espera y qué reglas
@@ -117,7 +130,7 @@ Cobertura de las 27 reglas semanticas del enunciado:
 
 ```bash
 docker compose up -d --build
-docker compose exec compiscript ./mvnw clean package
+docker compose exec compiscript ./mvnw clean verify
 docker compose exec compiscript java -jar target/compiscript.jar --test tests
 docker compose exec compiscript java -jar target/compiscript.jar examples/ok_basico.cps --dot
 ```

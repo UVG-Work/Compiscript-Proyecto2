@@ -1,4 +1,4 @@
-// @esperado: ERRORES 9
+// @esperado: ERRORES 8
 // @regla: C1, C2, G1, T3, L1
 // Control de flujo. Los terminadores van aislados en su propio bloque: si se
 // escriben seguidos, cada uno marca al siguiente como codigo muerto y la
@@ -30,7 +30,7 @@ foreach (n in x) {              // foreach sobre algo que no es lista
   print(n);
 }
 
-switch (x) {                    // el selector no es boolean
+switch (x) {                    // el selector no se exige boolean: ver ok_09
   case "texto":                 // el case no es comparable con el selector
     print("nunca");
 }
