@@ -140,7 +140,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
         ClassSymbol symbol = new ClassSymbol(name, new ClassType(name),
                 ctx.Identifier(0).getSymbol());
         if (!scopes.define(symbol)) {
-            reporter.error(ctx, AMBITO, "'" + name + "' ya esta declarado en este ambito");
+            reportDuplicate(name, ctx.Identifier(0).getSymbol(), AMBITO);
             return;
         }
         classSymbols.put(symbol.getClassType(), symbol);
@@ -240,18 +240,26 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
 
         Type returnType = ctx.type() == null ? PrimitiveType.VOID : resolveType(ctx.type());
         if (symbol.isConstructor()) {
-            if (ctx.type() != null) {
-                reporter.error(ctx, CLASES, "el constructor no declara tipo de retorno");
+            if (ctx.type() == null) {
+                returnType = PrimitiveType.VOID;
+            } else {
+                reporter.error(ctx.type(), CLASES,
+                        "el constructor no puede declarar un tipo de retorno");
+                // ERROR y no VOID: el `return x;` que casi siempre acompana a
+                // este error es la misma equivocacion del programador. Con VOID,
+                // visitReturnStatement la reportaba una segunda vez y ademas
+                // decia "no declara tipo de retorno", que es justo lo contrario
+                // de lo que el codigo tiene escrito.
+                returnType = ERROR;
             }
-            returnType = PrimitiveType.VOID;
         }
         symbol.setReturnType(returnType);
         symbol.setType(new FunctionType(parameterTypes, returnType));
         functionSymbols.put(ctx, symbol);
 
         if (!scopes.define(symbol)) {
-            reporter.error(ctx, owner == null ? AMBITO : CLASES,
-                    "'" + name + "' ya esta declarado en este ambito");
+            reportDuplicate(name, ctx.Identifier().getSymbol(),
+                    owner == null ? AMBITO : CLASES);
         }
     }
 
@@ -277,7 +285,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
             symbol.setKnownLength(literalLength(ctx.initializer().expression()));
         }
         if (!scopes.define(symbol)) {
-            reporter.error(ctx, AMBITO, "'" + name + "' ya esta declarado en este ambito");
+            reportDuplicate(name, ctx.Identifier().getSymbol(), AMBITO);
         }
         return PrimitiveType.VOID;
     }
@@ -295,7 +303,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
         symbol.setInitialized(true);
         symbol.setKnownLength(literalLength(ctx.expression()));
         if (!scopes.define(symbol)) {
-            reporter.error(ctx, AMBITO, "'" + name + "' ya esta declarado en este ambito");
+            reportDuplicate(name, ctx.Identifier().getSymbol(), AMBITO);
         }
         return PrimitiveType.VOID;
     }
@@ -308,9 +316,13 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
             return ERROR;
         }
         if (declared == null) {
-            if (TypeRules.isEmptyArrayLiteral(initial)) {
+            // `[]` y `[null]` son distintas para la asignacion pero iguales aqui:
+            // de ninguna de las dos sale el tipo del elemento.
+            if (TypeRules.isAllNullArray(initial)) {
                 reporter.error(ctx, LISTAS, "no se puede inferir el tipo de '" + name
-                        + "' desde una lista vacia: anote el tipo");
+                        + "' desde una lista "
+                        + (TypeRules.isEmptyArrayLiteral(initial) ? "vacia" : "de solo null")
+                        + ": anote el tipo");
                 return ERROR;
             }
             return initial;
@@ -473,6 +485,11 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
         }
         FunctionSymbol function = functions.peek();
         Type expected = function.getReturnType();
+        if (TypeRules.isError(expected)) {
+            // La firma ya produjo un error; cualquier queja sobre este `return`
+            // seria derivada de aquella.
+            return PrimitiveType.VOID;
+        }
         if (expected == PrimitiveType.VOID) {
             if (ctx.expression() != null) {
                 reporter.error(ctx, FUNCIONES, "la funcion '" + function.getName()
@@ -1389,6 +1406,31 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
 
     private static boolean isNumeric(Type type) {
         return type instanceof PrimitiveType primitive && primitive.isNumeric();
+    }
+
+    /**
+     * Culpa a la declaracion que sobra, que es la que aparece despues en el
+     * codigo.
+     *
+     * <p>Hace falta porque {@link #hoist} registra clases y funciones antes de
+     * recorrer las sentencias: con {@code let x} en la linea 1 y {@code class x}
+     * en la 3, la clase gana el nombre y la que falla al definirse es la de la
+     * linea 1, que esta perfectamente escrita.
+     */
+    private void reportDuplicate(String name, Token duplicate,
+                                 SemanticError.Category category) {
+        Symbol previous = scopes.current().resolveLocal(name);
+        Token blame = previous != null && isAfter(previous.getDeclaration(), duplicate)
+                ? previous.getDeclaration() : duplicate;
+        reporter.error(blame, category, "'" + name + "' ya esta declarado en este ambito");
+    }
+
+    private static boolean isAfter(Token a, Token b) {
+        if (a == null) {
+            return false;
+        }
+        return a.getLine() != b.getLine() ? a.getLine() > b.getLine()
+                : a.getCharPositionInLine() > b.getCharPositionInLine();
     }
 
     // Los operadores de las reglas binarias no llevan etiqueta, asi que no hay

@@ -43,7 +43,23 @@ public final class TypeRules {
         return type instanceof PrimitiveType primitive && primitive.isNumeric();
     }
 
+    /**
+     * Solo el literal {@code []}, comparado por identidad contra el centinela.
+     *
+     * <p>Antes se comparaba la <em>forma</em> ({@code ArrayType} con elemento
+     * {@code null}), y {@code [null]} tiene exactamente esa forma: entraba por
+     * el atajo del literal vacio y {@code let a: integer[] = [null];} pasaba
+     * limpio, dejando un null dentro de una lista de enteros.
+     */
     public static boolean isEmptyArrayLiteral(Type type) {
+        return type == EMPTY_ARRAY;
+    }
+
+    /**
+     * Una lista cuyos elementos son todos {@code null}: {@code []}, {@code [null]},
+     * {@code [null, null]}. De ninguna se puede inferir el tipo del elemento.
+     */
+    public static boolean isAllNullArray(Type type) {
         return type instanceof ArrayType array && array.getElementType() == PrimitiveType.NULL;
     }
 
@@ -58,6 +74,11 @@ public final class TypeRules {
         if (target instanceof ArrayType targetArray && source instanceof ArrayType sourceArray) {
             if (isEmptyArrayLiteral(sourceArray)) {
                 return true;
+            }
+            // [null] solo cabe donde el elemento admita null. La invariancia de
+            // abajo compara con equalsType y rechazaria hasta C[] = [null].
+            if (isAllNullArray(sourceArray)) {
+                return isReference(targetArray.getElementType());
             }
             if (targetArray.getElementType() instanceof ArrayType
                     && sourceArray.getElementType() instanceof ArrayType) {
