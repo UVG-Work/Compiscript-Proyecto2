@@ -2,6 +2,7 @@ package com.uvg.compiscript.ide;
 
 import com.uvg.compiscript.semantic.SemanticError;
 import com.uvg.compiscript.semantic.SemanticError.Severity;
+import com.uvg.compiscript.tools.RuleCatalog;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
@@ -41,7 +42,8 @@ public class DiagnosticsPanel extends JPanel {
                     "Compila con F5 para ver aqui los errores y advertencias.");
     private final JPanel sinErrores =
             IdeTheme.emptyState("Sin errores ni advertencias",
-                    "El programa pasa las 27 reglas semanticas del analizador.");
+                    "El programa pasa las " + RuleCatalog.RULES.size()
+                            + " reglas semanticas y se genero su codigo intermedio.");
 
     public DiagnosticsPanel(BiConsumer<Integer, Integer> onActivate) {
         super(new BorderLayout());

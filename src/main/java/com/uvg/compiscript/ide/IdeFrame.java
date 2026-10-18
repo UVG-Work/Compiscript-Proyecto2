@@ -52,6 +52,10 @@ public class IdeFrame extends JFrame {
     private final TreePanel treePanel = new TreePanel();
     private final SymbolTablePanel symbolsPanel = new SymbolTablePanel();
     private final TokensPanel tokensPanel = new TokensPanel();
+    private final TacPanel tacPanel = new TacPanel("Sin codigo intermedio",
+            "Compila con F5 un programa sin errores para generar su TAC.");
+    private final TacPanel recordsPanel = new TacPanel("Sin registros de activacion",
+            "Se calculan al generar el codigo intermedio.");
     private final DiagnosticsPanel diagnosticsPanel;
     private final JTextArea console = new JTextArea(8, 80);
     private final JTabbedPane bottom = new JTabbedPane();
@@ -80,6 +84,8 @@ public class IdeFrame extends JFrame {
         views.addTab("Arbol sintactico", treePanel);
         views.addTab("Tabla de simbolos", symbolsPanel);
         views.addTab("Tokens", tokensPanel);
+        views.addTab("Codigo intermedio", tacPanel);
+        views.addTab("Registros de activacion", recordsPanel);
 
         bottom.setFont(IdeTheme.UI);
         bottom.addTab("Errores", diagnosticsPanel);
@@ -261,6 +267,8 @@ public class IdeFrame extends JFrame {
         tokensPanel.setTokens(result.tokens());
         treePanel.show(result.tree(), result.parser());
         symbolsPanel.setRoot(result.globalScope());
+        tacPanel.setText(result.tac() == null ? null : result.tac().render());
+        recordsPanel.setText(result.tac() == null ? null : result.tac().recordsText());
 
         int errors = result.errors().size();
         int warnings = result.warnings().size();
@@ -270,9 +278,10 @@ public class IdeFrame extends JFrame {
                     IdeTheme.ERROR);
             bottom.setSelectedIndex(0);
         } else if (warnings > 0) {
-            setStatus("Sin errores. " + warnings + " advertencia(s).", IdeTheme.WARN);
+            setStatus("Sin errores, codigo intermedio generado. " + warnings
+                    + " advertencia(s).", IdeTheme.WARN);
         } else {
-            setStatus("Sin errores ni advertencias.", IdeTheme.OK);
+            setStatus("Sin errores ni advertencias. Codigo intermedio generado.", IdeTheme.OK);
         }
 
         console.append("=== " + origin + " ===\n");
@@ -298,8 +307,8 @@ public class IdeFrame extends JFrame {
         try (PrintStream out = new PrintStream(buffer, true, StandardCharsets.UTF_8)) {
             int code = TestRunner.run(chooser.getSelectedFile().toPath(), out);
             setStatus(code == 0
-                    ? "Bateria: todas las pruebas pasan y las 27 reglas estan cubiertas."
-                    : "Bateria: hay pruebas en rojo o reglas sin cubrir. Mira la salida.",
+                    ? "Bateria: todas las pruebas pasan; reglas y construcciones cubiertas."
+                    : "Bateria: hay pruebas en rojo o casos sin cubrir. Mira la salida.",
                     code == 0 ? IdeTheme.OK : IdeTheme.ERROR);
         } catch (IOException e) {
             setStatus("No se pudo correr la bateria: " + e.getMessage(), IdeTheme.ERROR);
