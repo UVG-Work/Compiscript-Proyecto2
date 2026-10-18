@@ -56,7 +56,7 @@ public final class CompilerService {
         // Con el arbol mal formado el analisis semantico produce errores fantasma.
         if (listener.hasErrors()) {
             return new CompilationResult(origin, parser, tokens, tree,
-                    List.copyOf(diagnostics), null, false);
+                    List.copyOf(diagnostics), null, null, false);
         }
 
         SemanticAnalyzer analyzer = new SemanticAnalyzer();
@@ -67,6 +67,7 @@ public final class CompilerService {
                 .thenComparingInt(SemanticError::column));
 
         return new CompilationResult(origin, parser, tokens, tree,
-                List.copyOf(diagnostics), analyzer.getGlobalScope(), true);
+                List.copyOf(diagnostics), analyzer.getGlobalScope(),
+                analyzer.getAnnotations(), true);
     }
 }

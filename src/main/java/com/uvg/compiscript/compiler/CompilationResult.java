@@ -1,5 +1,6 @@
 package com.uvg.compiscript.compiler;
 
+import com.uvg.compiscript.semantic.Annotations;
 import com.uvg.compiscript.semantic.SemanticError;
 import com.uvg.compiscript.semantic.SemanticError.Severity;
 import com.uvg.compiscript.symbols.Scope;
@@ -22,6 +23,7 @@ public record CompilationResult(String origin,
                                 ParseTree tree,
                                 List<SemanticError> diagnostics,
                                 Scope globalScope,
+                                Annotations annotations,
                                 boolean parsedCleanly) {
 
     public List<SemanticError> errors() {

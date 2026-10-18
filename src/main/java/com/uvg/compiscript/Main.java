@@ -1,5 +1,6 @@
 package com.uvg.compiscript;
 
+import com.uvg.compiscript.codegen.CodeGenerator;
 import com.uvg.compiscript.compiler.CompilationResult;
 import com.uvg.compiscript.compiler.CompilerService;
 import com.uvg.compiscript.ide.IdeApp;
@@ -37,7 +38,8 @@ public class Main {
               --tree     imprime el arbol de parseo en texto
               --tokens   imprime la secuencia de tokens del lexer
               --dot      exporta el arbol a .dot y, si hay graphviz, a .png
-              --quiet    no imprime la tabla de simbolos""";
+              --quiet    no imprime la tabla de simbolos
+              --tac      imprime solo el codigo intermedio""";
 
     public static void main(String[] args) throws IOException {
         String file = null;
@@ -47,9 +49,11 @@ public class Main {
         boolean exportDot = false;
         boolean quiet = false;
         boolean ide = false;
+        boolean tacOnly = false;
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
+                case "--tac" -> tacOnly = true;
                 case "--tree" -> showTree = true;
                 case "--tokens" -> showTokens = true;
                 case "--dot" -> exportDot = true;
@@ -86,8 +90,23 @@ public class Main {
             System.exit(2);
         }
 
+        if (tacOnly) {
+            System.exit(printTac(file));
+        }
         System.out.println("=== " + file + " ===");
         System.exit(analyze(file, showTree, showTokens, exportDot, quiet));
+    }
+
+    /** Solo el TAC en stdout, para poder redirigirlo a un archivo; los errores van a stderr. */
+    private static int printTac(String file) throws IOException {
+        CompilationResult result = CompilerService.compileFile(Path.of(file));
+        if (result.hasErrors()) {
+            result.errors().forEach(error -> System.err.println("  " + error));
+            return 1;
+        }
+        System.out.print(new CodeGenerator(result.annotations(), result.globalScope())
+                .generate(result.tree()).render());
+        return 0;
     }
 
     /** @return 0 si el archivo esta limpio, 1 si tiene errores. */
