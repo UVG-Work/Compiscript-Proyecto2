@@ -968,7 +968,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
             // Cualquier reasignacion invalida la longitud conocida.
             variable.setKnownLength(valueExpression == null ? -1 : literalLength(valueExpression));
         }
-        noteCapture(name);
+        noteCapture(token);
     }
 
     private Type assignToProperty(Type object, Token token, Type value, ParserRuleContext ctx) {
@@ -1403,7 +1403,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
                 reporter.error(ctx, GENERAL, "'" + name + "' se usa antes de asignarle un valor");
             }
         }
-        noteCapture(name);
+        noteCapture(ctx.Identifier().getSymbol());
         return symbol.getType() == null ? ERROR : symbol.getType();
     }
 
@@ -1416,7 +1416,15 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
      * la funcion actual lo esta capturando. Los globales no cuentan: usarlos no
      * es capturar.
      */
-    private void noteCapture(String name) {
+    private void noteCapture(Token token) {
+        String name = token.getText();
+        Scope declared = scopes.current().scopeOf(name);
+        if (declared != null && declared.enclosingFunction() != null
+                && crossesClass(scopes.current(), declared)) {
+            reporter.error(token, CLASES, "la clase no puede usar '" + name
+                    + "': es local de la funcion que declara la clase");
+            return;
+        }
         if (functions.isEmpty()) {
             return;
         }
@@ -1436,6 +1444,21 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
         if (where.resolveLocal(name) instanceof VariableSymbol variable) {
             variable.setCaptured(true);
         }
+    }
+
+    /**
+     * Subir de {@code from} a {@code to} atravesando un ambito de clase es usar,
+     * desde un metodo o un valor inicial de atributo, algo local de la funcion
+     * que declara la clase. Los metodos se invocan por la tabla de metodos sin
+     * enlace de acceso, asi que ese marco es inalcanzable.
+     */
+    private static boolean crossesClass(Scope from, Scope to) {
+        for (Scope scope = from; scope != null && scope != to; scope = scope.getParent()) {
+            if (scope.getKind() == Scope.Kind.CLASS) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ------------------------------------------------------------------

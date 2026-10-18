@@ -49,6 +49,7 @@ public final class RuleCatalog {
         RULES.put("K3", "manejo de 'this' dentro del ambito de la clase");
         RULES.put("K4", "un metodo sobrescrito conserva la firma del padre");
         RULES.put("K5", "un metodo solo se usa invocandolo, no como valor");
+        RULES.put("K6", "una clase local no usa las locales de la funcion que la declara");
 
         RULES.put("L1", "tipo de los elementos de una lista");
         RULES.put("L2", "validacion de indices en el acceso a listas");
