@@ -795,16 +795,28 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         return ctx.arrayLiteral() != null ? visit(ctx.arrayLiteral()) : ctx.getText();
     }
 
-    /** La longitud va en el encabezado y los elementos uno tras otro, cada uno de su tamano. */
     @Override
     public String visitArrayLiteral(CompiscriptParser.ArrayLiteralContext ctx) {
-        int size = ((ArrayType) notes.type(ctx)).getElementType().size();
+        return arrayLiteral(ctx, (ArrayType) notes.type(ctx));
+    }
+
+    /**
+     * La longitud va en el encabezado y los elementos uno tras otro, cada uno
+     * de su tamano y convertido al tipo del elemento. El tipo baja a las listas
+     * internas: en {@code [[1, 2], [3.5]]} la primera es float[] aunque sola
+     * se tiparia integer[], y con el paso equivocado la lectura se saldria.
+     */
+    private String arrayLiteral(CompiscriptParser.ArrayLiteralContext ctx, ArrayType type) {
+        Type element = type.getElementType();
+        int size = element.size();
         List<CompiscriptParser.ExpressionContext> items = ctx.expression();
         String array = temp();
         emit(array + " = alloc " + (MemoryLayout.ARRAY_HEADER + items.size() * size));
         emit(array + "[0] = " + items.size());
         for (int i = 0; i < items.size(); i++) {
-            String item = visit(items.get(i));
+            String item = strip(items.get(i)) instanceof CompiscriptParser.ArrayLiteralContext inner
+                    && element instanceof ArrayType innerType
+                    ? arrayLiteral(inner, innerType) : value(items.get(i), element);
             emit(array + "[" + (MemoryLayout.ARRAY_HEADER + i * size) + "] = " + item);
             free(item);
         }
@@ -930,11 +942,19 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         return stored;
     }
 
-    /** Bytes desde el inicio de la lista: encabezado + indice * tamano del elemento. */
+    /**
+     * Bytes desde el inicio de la lista: encabezado + indice * tamano del
+     * elemento. Con un indice constante se calcula al compilar, salvo que no
+     * quepa en un int: el semantico no puede acotar el indice de una lista de
+     * longitud desconocida, asi que {@code a[99999999999]} es un programa valido.
+     */
     private String elementOffset(String index, Type element) {
         int size = element.size();
-        if (index.matches("\\d+")) {
-            return String.valueOf(MemoryLayout.ARRAY_HEADER + Integer.parseInt(index) * size);
+        if (index.matches("\\d{1,10}")) {
+            long offset = MemoryLayout.ARRAY_HEADER + Long.parseLong(index) * size;
+            if (offset <= Integer.MAX_VALUE) {
+                return String.valueOf(offset);
+            }
         }
         free(index);
         String offset = temp();

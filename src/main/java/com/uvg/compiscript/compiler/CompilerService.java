@@ -69,10 +69,21 @@ public final class CompilerService {
         diagnostics.sort(Comparator.comparingInt(SemanticError::line)
                 .thenComparingInt(SemanticError::column));
 
-        TacProgram tac = analyzer.hasErrors() ? null
-                : new CodeGenerator(analyzer.getAnnotations(), analyzer.getGlobalScope())
-                        .generate(tree);
+        TacProgram tac = analyzer.hasErrors() ? null : generate(analyzer, tree, diagnostics);
         return new CompilationResult(origin, parser, tokens, tree,
                 List.copyOf(diagnostics), analyzer.getGlobalScope(), tac, true);
+    }
+
+    /** Un fallo del generador es un bug nuestro: se reporta como error y no tumba el CLI ni el IDE. */
+    private static TacProgram generate(SemanticAnalyzer analyzer, ParseTree tree,
+                                       List<SemanticError> diagnostics) {
+        try {
+            return new CodeGenerator(analyzer.getAnnotations(), analyzer.getGlobalScope())
+                    .generate(tree);
+        } catch (RuntimeException bug) {
+            diagnostics.add(new SemanticError(1, 0, Category.GENERAL, Severity.ERROR,
+                    "error interno al generar codigo intermedio: " + bug));
+            return null;
+        }
     }
 }
