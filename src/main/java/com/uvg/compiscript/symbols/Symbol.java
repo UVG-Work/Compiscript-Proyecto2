@@ -18,6 +18,7 @@ public abstract class Symbol {
     private final Token declaration;
     private Type type;
     private int offset = -1;
+    private String address = "";
     private Scope scope;
 
     protected Symbol(String name, Type type, Token declaration) {
@@ -86,6 +87,19 @@ public abstract class Symbol {
 
     public void setOffset(int offset) {
         this.offset = offset;
+    }
+
+    /** Como lo nombra el codigo intermedio: G[n], fp[n], +n en un objeto, o una etiqueta. */
+    public String getAddress() {
+        return address;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
+    }
+
+    public int getSize() {
+        return type == null ? 0 : type.size();
     }
 
     /** Tipo semantico. Etiqueta corta para la tabla de simbolos del IDE. */

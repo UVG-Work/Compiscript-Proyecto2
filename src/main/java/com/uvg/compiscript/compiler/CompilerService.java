@@ -7,6 +7,7 @@ import com.uvg.compiscript.semantic.SemanticAnalyzer;
 import com.uvg.compiscript.semantic.SemanticError;
 import com.uvg.compiscript.semantic.SemanticError.Category;
 import com.uvg.compiscript.semantic.SemanticError.Severity;
+import com.uvg.compiscript.symbols.MemoryLayout;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -60,6 +61,7 @@ public final class CompilerService {
 
         SemanticAnalyzer analyzer = new SemanticAnalyzer();
         analyzer.analyze(tree);
+        MemoryLayout.assign(analyzer.getGlobalScope());
         diagnostics.addAll(analyzer.getDiagnostics());
         diagnostics.sort(Comparator.comparingInt(SemanticError::line)
                 .thenComparingInt(SemanticError::column));

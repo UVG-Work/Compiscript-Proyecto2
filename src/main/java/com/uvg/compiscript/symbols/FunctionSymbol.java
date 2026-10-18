@@ -14,6 +14,10 @@ public class FunctionSymbol extends Symbol {
     private Type returnType;
     private Scope bodyScope;
     private ClassSymbol owner;
+    private String label;
+    private int localsEnd;
+    private int frameSize;
+    private int tempCount;
 
     public FunctionSymbol(String name, Token declaration) {
         super(name, null, declaration);
@@ -65,6 +69,44 @@ public class FunctionSymbol extends Symbol {
 
     public boolean isConstructor() {
         return owner != null && "constructor".equals(getName());
+    }
+
+    public boolean isMethod() {
+        return owner != null;
+    }
+
+    public String getLabel() {
+        return label;
+    }
+
+    public void setLabel(String label) {
+        this.label = label;
+        setAddress(label);
+    }
+
+    /** Fin de parametros y locales en el marco; despues vienen los temporales. */
+    public int getLocalsEnd() {
+        return localsEnd;
+    }
+
+    public void setLocalsEnd(int localsEnd) {
+        this.localsEnd = localsEnd;
+    }
+
+    public int getFrameSize() {
+        return frameSize;
+    }
+
+    public void setFrameSize(int frameSize) {
+        this.frameSize = frameSize;
+    }
+
+    public int getTempCount() {
+        return tempCount;
+    }
+
+    public void setTempCount(int tempCount) {
+        this.tempCount = tempCount;
     }
 
     @Override

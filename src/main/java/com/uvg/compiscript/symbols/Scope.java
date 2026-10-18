@@ -151,10 +151,10 @@ public class Scope {
             sb.append(indent).append("  (vacio)").append(System.lineSeparator());
         }
         for (Symbol symbol : symbols.values()) {
-            sb.append(String.format("%s  %-8s %-14s %-22s %-11s %d:%-3d alcance %d  offset %-4d%s%n",
+            sb.append(String.format("%s  %-8s %-14s %-22s %-11s %d:%-3d alcance %d  dir %-14s%s%n",
                     indent, symbol.getKind(), symbol.getName(), symbol.getType(),
                     symbol.getTokenName(), symbol.getLine(), symbol.getColumn(),
-                    symbol.getScopeDepth(), symbol.getOffset(), extras(symbol)));
+                    symbol.getScopeDepth(), symbol.getAddress(), extras(symbol)));
         }
         for (Scope child : children) {
             child.dump(sb, depth + 1);
@@ -163,9 +163,13 @@ public class Scope {
 
     private static String extras(Symbol symbol) {
         if (symbol instanceof FunctionSymbol function) {
-            String extra = "  " + function.getArity() + " param";
+            String extra = "  " + function.getArity() + " param, marco " + function.getFrameSize()
+                    + " bytes";
             return function.getCaptures().isEmpty()
                     ? extra : extra + ", captura " + function.getCaptures();
+        }
+        if (symbol instanceof ClassSymbol type) {
+            return "  instancia " + type.getInstanceSize() + " bytes";
         }
         if (symbol instanceof ParameterSymbol parameter) {
             return "  por " + parameter.getPassingMode().name().toLowerCase();

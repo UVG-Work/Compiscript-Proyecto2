@@ -1,5 +1,6 @@
 package com.uvg.compiscript.ide;
 
+import com.uvg.compiscript.symbols.ClassSymbol;
 import com.uvg.compiscript.symbols.FunctionSymbol;
 import com.uvg.compiscript.symbols.ParameterSymbol;
 import com.uvg.compiscript.symbols.Scope;
@@ -43,7 +44,7 @@ public class SymbolTablePanel extends JPanel {
 
     private final DefaultTableModel tableModel = new DefaultTableModel(
             new Object[]{"Lexema", "Tipo semantico", "Tipo de dato", "Token",
-                         "Alcance", "Offset", "Linea", "Col", "Detalle"}, 0) {
+                         "Alcance", "Direccion", "Linea", "Col", "Detalle"}, 0) {
         @Override
         public boolean isCellEditable(int row, int column) {
             return false;
@@ -75,7 +76,7 @@ public class SymbolTablePanel extends JPanel {
 
         IdeTheme.styleTable(table);
         table.setDefaultRenderer(Object.class, new IdeTheme.CellRenderer(false));
-        IdeTheme.widths(table, 108, 88, 148, 74, 54, 52, 46, 38, 190);
+        IdeTheme.widths(table, 108, 88, 148, 74, 54, 120, 46, 38, 190);
         // El tipo de dato es una firma: se lee mucho mejor monoespaciado.
         table.getColumnModel().getColumn(2).setCellRenderer(new IdeTheme.CellRenderer(true));
 
@@ -129,8 +130,10 @@ public class SymbolTablePanel extends JPanel {
 
     private void showSymbolsOf(Scope scope) {
         caption.setText(scope.getName());
-        frameSize.setText(scope.getSymbols().size() + " simbolo(s) - marco de "
-                + scope.getSize() + " bytes - profundidad " + scope.getDepth());
+        int bytes = scope.getOwner() != null ? scope.getOwner().getFrameSize() : scope.getSize();
+        frameSize.setText(scope.getSymbols().size() + " simbolo(s) - "
+                + (scope.getOwner() != null ? "registro de activacion de " : "")
+                + bytes + " bytes - profundidad " + scope.getDepth());
         tableModel.setRowCount(0);
         for (Symbol symbol : scope.getSymbols()) {
             tableModel.addRow(new Object[]{
@@ -139,7 +142,7 @@ public class SymbolTablePanel extends JPanel {
                     String.valueOf(symbol.getType()),
                     symbol.getTokenName(),
                     symbol.getScopeDepth(),
-                    symbol.getOffset(),
+                    symbol.getAddress(),
                     symbol.getLine(),
                     symbol.getColumn(),
                     detail(symbol)});
@@ -147,8 +150,13 @@ public class SymbolTablePanel extends JPanel {
     }
 
     private static String detail(Symbol symbol) {
+        if (symbol instanceof ClassSymbol type) {
+            return "instancia de " + type.getInstanceSize() + " bytes, "
+                    + type.getVtable().size() + " metodo(s) en la tabla";
+        }
         if (symbol instanceof FunctionSymbol function) {
-            String detail = function.getArity() + " parametro(s)";
+            String detail = function.getArity() + " parametro(s), marco de "
+                    + function.getFrameSize() + " bytes";
             return function.getCaptures().isEmpty()
                     ? detail : detail + ", captura " + function.getCaptures();
         }
