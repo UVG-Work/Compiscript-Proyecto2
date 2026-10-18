@@ -51,6 +51,7 @@ public class FunctionSymbol extends Symbol {
 
     public void setBodyScope(Scope bodyScope) {
         this.bodyScope = bodyScope;
+        bodyScope.setOwner(this);
     }
 
     /** La clase que la declara, o null si es una funcion libre. */

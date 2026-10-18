@@ -36,6 +36,10 @@ public class SemanticAnalyzer {
         return visitor.getScopes().getRoot();
     }
 
+    public Annotations getAnnotations() {
+        return visitor.getAnnotations();
+    }
+
     public String dumpSymbolTable() {
         return getGlobalScope().dump();
     }

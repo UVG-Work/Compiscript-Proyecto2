@@ -50,6 +50,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
 
     private final ScopeManager scopes = new ScopeManager();
     private final ErrorReporter reporter = new ErrorReporter();
+    private final Annotations annotations = new Annotations();
 
     private final Deque<FunctionSymbol> functions = new ArrayDeque<>();
     private final Deque<ClassSymbol> classes = new ArrayDeque<>();
@@ -69,6 +70,17 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
 
     public ScopeManager getScopes() {
         return scopes;
+    }
+
+    public Annotations getAnnotations() {
+        return annotations;
+    }
+
+    @Override
+    public Type visit(ParseTree tree) {
+        Type type = super.visit(tree);
+        annotations.type(tree, type);
+        return type;
     }
 
     // ------------------------------------------------------------------
@@ -130,8 +142,35 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
         for (CompiscriptParser.ClassDeclarationContext ctx : classDeclarations) {
             buildClassMembers(ctx);
         }
+        for (CompiscriptParser.ClassDeclarationContext ctx : classDeclarations) {
+            checkOverrides(ctx);
+        }
         for (CompiscriptParser.FunctionDeclarationContext ctx : functionDeclarations) {
             declareFunctionSignature(ctx, null);
+        }
+    }
+
+    /**
+     * Va despues de construir los miembros de todas las clases: el padre puede
+     * estar declarado mas abajo. Con otra firma, una llamada a traves del tipo
+     * padre pasaria argumentos equivocados al metodo de la subclase.
+     */
+    private void checkOverrides(CompiscriptParser.ClassDeclarationContext ctx) {
+        if (!(annotations.symbol(ctx) instanceof ClassSymbol symbol)
+                || symbol.getParent() == null || symbol.getMemberScope() == null) {
+            return;
+        }
+        for (Symbol member : symbol.getMemberScope().getSymbols()) {
+            if (!(member instanceof FunctionSymbol method) || method.isConstructor()) {
+                continue;
+            }
+            if (symbol.getParent().resolveMember(method.getName()) instanceof FunctionSymbol inherited
+                    && !inherited.getType().getName().equals(method.getType().getName())) {
+                reporter.error(method.getDeclaration(), CLASES, "el metodo '" + method.getName()
+                        + "' sobrescribe a '" + inherited.getOwner().getName() + "."
+                        + inherited.getName() + "' con otra firma: " + method.getType()
+                        + " en vez de " + inherited.getType());
+            }
         }
     }
 
@@ -144,6 +183,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
             return;
         }
         classSymbols.put(symbol.getClassType(), symbol);
+        annotations.bind(ctx, symbol);
         symbol.setMemberScope(new Scope("clase " + name, Scope.Kind.CLASS, scopes.current()));
     }
 
@@ -256,6 +296,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
         symbol.setReturnType(returnType);
         symbol.setType(new FunctionType(parameterTypes, returnType));
         functionSymbols.put(ctx, symbol);
+        annotations.bind(ctx, symbol);
 
         if (!scopes.define(symbol)) {
             reportDuplicate(name, ctx.Identifier().getSymbol(),
@@ -287,6 +328,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
         if (!scopes.define(symbol)) {
             reportDuplicate(name, ctx.Identifier().getSymbol(), AMBITO);
         }
+        annotations.bind(ctx, symbol);
         return PrimitiveType.VOID;
     }
 
@@ -305,6 +347,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
         if (!scopes.define(symbol)) {
             reportDuplicate(name, ctx.Identifier().getSymbol(), AMBITO);
         }
+        annotations.bind(ctx, symbol);
         return PrimitiveType.VOID;
     }
 
@@ -579,6 +622,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
             return ERROR;
         }
 
+        annotations.bind(ctx, classSymbol);
         List<Type> arguments = visitArgumentTypes(ctx.arguments());
         Symbol constructor = classSymbol.resolveMember("constructor");
         if (constructor instanceof FunctionSymbol function
@@ -733,6 +777,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
                 ctx.Identifier().getSymbol(), false);
         loopVariable.setInitialized(true);
         scopes.define(loopVariable);
+        annotations.bind(ctx, loopVariable);
         loopDepth++;
         visitStatementList(ctx.block().statement());
         loopDepth--;
@@ -800,6 +845,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
                 PrimitiveType.STRING, ctx.Identifier().getSymbol(), false);
         error.setInitialized(true);
         scopes.define(error);
+        annotations.bind(ctx, error);
         visitStatementList(ctx.block(1).statement());
         reportUnused(scope);
         scopes.pop();
@@ -903,6 +949,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
             reporter.error(token, AMBITO, "'" + name + "' no esta declarado");
             return;
         }
+        annotations.bind(ctx, symbol);
         if (!(symbol instanceof VariableSymbol) && !(symbol instanceof ParameterSymbol)) {
             reporter.error(token, AMBITO,
                     "'" + name + "' no es una variable y no se puede asignar");
@@ -950,6 +997,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
                     + "' no tiene el miembro '" + name + "'");
             return ERROR;
         }
+        annotations.bind(ctx, member);
         if (member instanceof VariableSymbol field && field.isConstant()) {
             reporter.error(token, TIPOS,
                     "no se puede reasignar el atributo constante '" + name + "'");
@@ -1207,6 +1255,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
      */
     private Type foldSuffixes(CompiscriptParser.LeftHandSideContext ctx, int count) {
         Type current = visit(ctx.primaryAtom());
+        current = rejectMethodValue(ctx, ctx.primaryAtom(), 0, current);
         for (int i = 0; i < count; i++) {
             CompiscriptParser.SuffixOpContext suffix = ctx.suffixOp(i);
             if (suffix instanceof CompiscriptParser.CallExprContext call) {
@@ -1214,10 +1263,28 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
             } else if (suffix instanceof CompiscriptParser.IndexExprContext index) {
                 current = indexInto(current, index, ctx, i);
             } else if (suffix instanceof CompiscriptParser.PropertyAccessExprContext property) {
-                current = propertyInto(current, property);
+                current = rejectMethodValue(ctx, property, i + 1, propertyInto(current, property));
             }
+            annotations.type(suffix, current);
         }
         return current;
+    }
+
+    /**
+     * Un metodo necesita su objeto: tomarlo como valor ({@code let m = obj.m;})
+     * perderia el {@code this}. {@code next} es la posicion del sufijo que deberia
+     * ser la llamada.
+     */
+    private Type rejectMethodValue(CompiscriptParser.LeftHandSideContext ctx, ParserRuleContext node,
+                                   int next, Type type) {
+        if (!(annotations.symbol(node) instanceof FunctionSymbol method) || method.getOwner() == null
+                || (next < ctx.suffixOp().size()
+                    && ctx.suffixOp(next) instanceof CompiscriptParser.CallExprContext)) {
+            return type;
+        }
+        reporter.error(node, CLASES, "el metodo '" + method.getName()
+                + "' solo puede usarse invocandolo");
+        return ERROR;
     }
 
     private Type callInto(Type callee, CompiscriptParser.CallExprContext call,
@@ -1317,6 +1384,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
                     + "' no tiene el miembro '" + name + "'");
             return ERROR;
         }
+        annotations.bind(property, member);
         return member.getType() == null ? ERROR : member.getType();
     }
 
@@ -1328,6 +1396,7 @@ public class SemanticVisitor extends CompiscriptBaseVisitor<Type> {
             reporter.error(ctx, AMBITO, "'" + name + "' no esta declarado");
             return ERROR;
         }
+        annotations.bind(ctx, symbol);
         if (symbol instanceof VariableSymbol variable) {
             variable.setUsed(true);
             if (!variable.isInitialized()) {

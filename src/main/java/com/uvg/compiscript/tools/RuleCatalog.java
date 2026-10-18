@@ -46,6 +46,8 @@ public final class RuleCatalog {
         RULES.put("K1", "existencia de atributos y metodos accedidos con '.'");
         RULES.put("K2", "correcta invocacion del constructor");
         RULES.put("K3", "manejo de 'this' dentro del ambito de la clase");
+        RULES.put("K4", "un metodo sobrescrito conserva la firma del padre");
+        RULES.put("K5", "un metodo solo se usa invocandolo, no como valor");
 
         RULES.put("L1", "tipo de los elementos de una lista");
         RULES.put("L2", "validacion de indices en el acceso a listas");

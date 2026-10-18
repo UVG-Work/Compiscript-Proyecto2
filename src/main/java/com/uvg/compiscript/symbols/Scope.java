@@ -21,6 +21,7 @@ public class Scope {
     private final List<Scope> children = new ArrayList<>();
     private final Map<String, Symbol> symbols = new LinkedHashMap<>();
     private int size;
+    private FunctionSymbol owner;
 
     public Scope(String name, Kind kind, Scope parent) {
         this.name = name;
@@ -79,6 +80,26 @@ public class Scope {
             depth++;
         }
         return depth;
+    }
+
+    /** Cuantos ambitos de funcion hay de aqui a la raiz: 0 en el codigo global. */
+    public int getFunctionDepth() {
+        int depth = 0;
+        for (Scope scope = this; scope != null; scope = scope.parent) {
+            if (scope.kind == Kind.FUNCTION) {
+                depth++;
+            }
+        }
+        return depth;
+    }
+
+    /** La funcion cuyo cuerpo es este ambito; null si no es un ambito de funcion. */
+    public FunctionSymbol getOwner() {
+        return owner;
+    }
+
+    void setOwner(FunctionSymbol owner) {
+        this.owner = owner;
     }
 
     /** El ambito de funcion que contiene a este, o null si no hay ninguno. */
