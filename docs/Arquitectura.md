@@ -60,8 +60,9 @@ puede si los ámbitos sobreviven al recorrido. Las fases posteriores también lo
 necesitan.
 
 `Scope` usa `LinkedHashMap` y no `HashMap` para imprimir en orden de declaración.
-`define()` asigna `scopeDepth` y `offset` acumulando anchos, porque el Proyecto 3
-es generación de código intermedio y los offsets alimentan el marco de pila.
+Los desplazamientos **no** los asigna `define()`: los asigna `MemoryLayout`
+después del análisis, porque se cuentan por función y no por ámbito (ver
+*Generación de código intermedio*).
 
 ## Detección de closures
 
@@ -229,10 +230,11 @@ contradiga con su ejemplo.
 | Código muerto | Error, un mensaje por tramo | El flag `unreachable` se reinicia tras reportar, para no dar un mensaje por cada sentencia sobrante. |
 | Declarada y no usada | Advertencia, no error | No impide compilar; no cuenta para el código de salida. |
 
-## Las 27 reglas del enunciado y su cobertura
+## Las 29 reglas semánticas y su cobertura
 
 El enunciado pide una batería "que valide casos exitosos y fallidos **para cada
-regla semántica**". Las reglas se numeraron en
+regla semántica**". Son las 27 del enunciado más `K4` y `K5`, que agregó la
+generación de código. Las reglas se numeraron en
 [`tools/RuleCatalog.java`](../src/main/java/com/uvg/compiscript/tools/RuleCatalog.java)
 y cada `.cps` de [`tests/`](../tests) declara cuáles ejercita:
 
@@ -243,7 +245,7 @@ y cada `.cps` de [`tests/`](../tests) declara cuáles ejercita:
 
 `TestRunner` acumula esas etiquetas e imprime una matriz de cobertura al final;
 **una regla sin cubrir hace fallar la batería**, igual que una prueba en rojo. Así
-"tenemos pruebas" pasa a ser "demostramos cobertura de las 27 reglas".
+"tenemos pruebas" pasa a ser "demostramos cobertura de todas las reglas".
 
 | Grupo | Reglas |
 |---|---|
@@ -251,7 +253,7 @@ y cada `.cps` de [`tests/`](../tests) declara cuáles ejercita:
 | Manejo de ámbito | `A1` resolución de nombres · `A2` variables no declaradas · `A3` redeclaración · `A4` bloques anidados · `A5` un entorno por función/clase/bloque |
 | Funciones | `F1` argumentos · `F2` retorno · `F3` recursión · `F4` anidadas y closures · `F5` redeclaración |
 | Control de flujo | `C1` condiciones `boolean` · `C2` `break`/`continue` · `C3` `return` |
-| Clases | `K1` atributos y métodos · `K2` constructor · `K3` `this` |
+| Clases | `K1` atributos y métodos · `K2` constructor · `K3` `this` · `K4` sobrescritura con la misma firma · `K5` métodos solo invocados |
 | Listas | `L1` tipo de los elementos · `L2` índices |
 | Generales | `G1` código muerto · `G2` sentido semántico · `G3` declaraciones duplicadas |
 
@@ -260,6 +262,105 @@ soportar (crear un entorno, permitir recursión, permitir closures), no una
 restricción que un programa pueda violar. Pedirles un "caso fallido" no tiene
 sentido, así que la matriz las marca `n/a` y sólo exige el caso exitoso. Están
 declaradas en `RuleCatalog.CAPABILITY_ONLY`.
+
+## Generación de código intermedio
+
+El lenguaje intermedio, con sus ejemplos y supuestos, está en
+[`CodigoIntermedio.md`](CodigoIntermedio.md). Aquí va el porqué de cómo está
+construido.
+
+### El semántico anota el árbol; el generador no resuelve nada
+
+Hasta la fase anterior, el tipo de cada expresión se calculaba y se perdía, y
+los ámbitos sobrevivían pero sin ligarse a los nodos. El generador habría
+tenido que repetir la resolución de nombres, con sus sombras, sus clases
+declaradas más abajo y sus funciones homónimas, y cualquier diferencia con el
+semántico sería un bug silencioso. Ahora `SemanticVisitor` deja en
+`semantic/Annotations` el símbolo de cada nombre y el tipo de cada expresión
+mientras verifica (`visit()` está sobrescrito para registrar el tipo de todo
+nodo que visita), y `CodeGenerator` solo lee. El ámbito de un símbolo ya viaja
+en `Symbol.getScope()`, así que no hizo falta anotar ámbitos.
+
+### Desplazamientos por función, no por ámbito
+
+`Scope.define()` antes asignaba los offsets acumulando dentro de cada ámbito,
+así que todo bloque empezaba en 0. Dentro de una misma función, `j` en un
+bloque y `nota` en otro quedaban en el mismo lugar que la primera variable de
+la función. `symbols/MemoryLayout` recorre el árbol de ámbitos una vez:
+dentro de una función los bloques van uno tras otro en el mismo registro de
+activación; el código global y sus bloques van al área estática `G`. Corre
+siempre después del semántico, aunque haya errores, para que la tabla de
+símbolos muestre siempre direcciones coherentes.
+
+### Registros de activación en pila, con enlace de acceso
+
+Un borrador proponía reservar los registros en el heap para que una función
+devuelta siguiera viendo las variables de su contenedora. Se descartó al leer
+la gramática: `type` no tiene tipos función, así que no se puede declarar un
+retorno ni un parámetro de ese tipo, y una función no puede salir del registro
+que la contiene. Basta el esquema clásico: pila, enlace de control y enlace de
+acceso, con `access k` para subir `k` niveles.
+
+### `G[n]` y `fp[n]` son nombres; la memoria indirecta pasa por temporales
+
+Escribir `x` en el TAC sería más corto, pero escondería justamente lo que la
+fase tiene que demostrar: direcciones y registros de activación. Escribir
+`fp[n]` en cada operando lo deja a la vista. La memoria indirecta (objetos,
+listas, registros de otras funciones) solo aparece en `x = t[i]` y
+`t[i] = y`, con la base en un temporal. Así ninguna instrucción hace más de un
+acceso indirecto.
+
+### Temporales: el menor libre, liberado al consumirse
+
+El consumidor de un operando lo libera apenas emite la instrucción que lo
+usa, y una operación libera sus operandos **antes** de pedir el temporal del
+resultado. Con eso, `a + b * 2 - BASE / (a - b) % 4` usa dos temporales. Como
+siempre se entrega el menor libre, el total creado es el máximo vivo a la vez,
+y esa es la zona de temporales del registro. `TempPool` solo libera operandos
+que son exactamente `tN`: un `G[n]` o una etiqueta nunca entran al pool.
+
+### Condiciones como código de saltos
+
+`&&`, `||` y `!` no son instrucciones: `jump(condición, etiqueta, cuándo)`
+emite saltos y respeta el cortocircuito. Una condición de una sola comparación
+va entera al salto (`ifFalse a < b goto L`) en vez de calcular un booleano y
+preguntar por él. La constante `true` no emite salto, así que `while (true)`
+no tiene una comparación inútil.
+
+### Despacho dinámico y las dos reglas nuevas
+
+TypeScript invoca el método del objeto, no el de la variable, así que la
+llamada busca la dirección en la tabla de métodos del objeto. Para que eso sea
+correcto hicieron falta dos reglas semánticas:
+
+- **`K4`:** una sobrescritura conserva la firma. Sin ella, `Perro.hablar(x)`
+  sobrescribiendo `Animal.hablar()` pasaba el análisis, y una llamada a través
+  de una variable `Animal` le pasaba un argumento de menos.
+- **`K5`:** un método solo se usa invocándolo. `let m = obj.metodo;` pasaba el
+  análisis, pero un valor función no tiene dónde llevar `this`.
+
+Ninguna relaja una regla existente: las dos agregan errores.
+
+### `new` y los valores iniciales de los atributos
+
+Los valores iniciales de los atributos van en `Clase.init` y no en el
+constructor, porque una clase sin constructor también los necesita y porque la
+gramática no tiene `super`: sin `init`, los atributos heredados de una clase
+cuyo constructor no se llama quedarían sin su valor inicial. `init` llama
+primero al del padre. Solo se genera si en la cadena hay algún valor inicial.
+
+### La batería compara texto revisado a mano
+
+El enunciado no pide ejecutar el TAC, y un intérprete solo para la batería
+sería otro programa que probar. Cada caso de `tests/tac/` tiene su `.tac`
+esperado, y la batería compara línea por línea. La trampa es fijar como
+esperado lo que el generador produjo, sin leerlo: eso congela los bugs en vez
+de atraparlos. Cada `.tac` se revisó contra el fuente antes de fijarlo, como
+en *Errores a no repetir* #2.
+
+Además, `TestRunner` verifica en **todos** los casos con errores que no se haya
+producido TAC, y la matriz de las 24 construcciones (`RuleCatalog.GENERATION`)
+hace fallar la batería si alguna queda sin caso.
 
 ## El IDE
 
@@ -275,12 +376,13 @@ artefacto y ningún comando extra que memorizar.
 | `SymbolTablePanel` | `JTree` de ámbitos; al seleccionar uno, una tabla con **todos** los atributos de sus símbolos. Es la salida "estado de la tabla de símbolos por cada entorno" |
 | `DiagnosticsPanel` | Tabla Severidad / Categoría / Línea / Columna / Mensaje. Doble clic salta a la línea |
 | `TokensPanel` | El flujo de tokens del lexer |
+| `TacPanel` | El código intermedio y, en otra pestaña, el área estática, los registros de activación y la forma de cada objeto |
 
 **`compiler/CompilerService` es la pieza clave.** Antes, `Main.analyze` imprimía a
 `System.out` y no devolvía nada reutilizable; el IDE habría tenido que duplicar el
 cableado lexer→parser→listener→analizador, como ya lo duplicaba `TestRunner`. Ahora
 los tres consumen el mismo servicio, que devuelve un `CompilationResult` con árbol,
-tokens, ámbito global y diagnósticos.
+tokens, ámbito global, diagnósticos y el código intermedio (null si hubo errores).
 
 Los errores de sintaxis se convierten a `SemanticError` con categoría `SINTAXIS` y
 viajan **en la misma lista** que los semánticos: el enunciado pide reportarlos "con

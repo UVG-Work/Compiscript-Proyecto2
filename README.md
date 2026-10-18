@@ -1,10 +1,13 @@
-# Compiscript — Analizador Semántico
+# Compiscript — Análisis semántico y código intermedio
 
-Proyecto 2 de Construcción de Compiladores (UVG). Analizador semántico para
-Compiscript, un subconjunto de TypeScript, construido sobre ANTLR 4 y Java 17.
+Proyecto de Construcción de Compiladores (UVG). Compilador de Compiscript, un
+subconjunto de TypeScript, construido sobre ANTLR 4 y Java 17: análisis
+semántico y generación de código de tres direcciones (TAC).
 
-La especificación del lenguaje está en [`docs/Especificaciones.md`](docs/Especificaciones.md)
-y las decisiones de diseño en [`docs/Arquitectura.md`](docs/Arquitectura.md).
+- Lenguaje fuente: [`docs/Especificaciones.md`](docs/Especificaciones.md)
+- Lenguaje intermedio, con ejemplos de traducción y supuestos:
+  [`docs/CodigoIntermedio.md`](docs/CodigoIntermedio.md)
+- Arquitectura y decisiones de diseño: [`docs/Arquitectura.md`](docs/Arquitectura.md)
 
 ## Requisitos
 
@@ -44,25 +47,46 @@ java -jar target/compiscript.jar examples/ok_basico.cps
 | `--tree` | imprime el árbol de parseo en texto |
 | `--tokens` | imprime el flujo de tokens del lexer |
 | `--dot` | exporta el árbol a `.dot` y, si hay Graphviz, a `.png` |
-| `--quiet` | no imprime la tabla de símbolos |
-| `--test <dir>` | corre la batería de pruebas y la matriz de cobertura |
+| `--quiet` | no imprime la tabla de símbolos ni los registros de activación |
+| `--tac` | imprime solo el código intermedio (los errores van a stderr) |
+| `--test <dir>` | corre la batería de pruebas y las matrices de cobertura |
 | `--ide [archivo]` | abre el IDE gráfico |
 
 Códigos de salida: `0` sin errores, `1` con errores, `2` uso inválido. Los tres
 los distinguen el arnés de pruebas y cualquier CI.
 
-Por defecto imprime la tabla de símbolos entorno por entorno, con el tipo de
-ámbito, la profundidad, el tamaño del marco y, por símbolo, su clase, tipo,
-línea, offset y capturas:
+Si el programa no tiene errores, imprime en este orden:
+
+1. La tabla de símbolos, entorno por entorno, con la dirección de cada símbolo
+   (`G[n]`, `fp[n]`, `+n` en un objeto o la etiqueta de una función) y el
+   tamaño del registro de activación de cada función.
+2. El código intermedio.
+3. El área estática, el registro de activación de cada función y la forma de
+   cada objeto.
 
 ```
 $ java -jar target/compiscript.jar tests/ok_03_funciones.cps
-[FUNCTION] funcion crearContador (profundidad 1, 12 bytes)
-  function siguiente      () => integer          linea 30   offset 0  captura [cuenta]
-  var      cuenta         integer                linea 28   offset 8  capturada
+[FUNCTION] funcion crearContador (profundidad 1, 4 bytes)
+  function siguiente      () => integer   ...  dir crearContador.siguiente  0 param, marco 48 bytes, captura [cuenta]
+  var      cuenta         integer         ...  dir fp[32]          capturada
 ```
 
-Y los diagnósticos van con línea, columna, categoría y severidad:
+```
+$ java -jar target/compiscript.jar tests/tac/ok_03_funciones.cps --tac
+func factorial, 44
+    ifFalse fp[32] <= 1 goto L1
+    return 1                        ; return 1;
+L1:
+    t1 = fp[32] - 1                 ; return n * factorial(n - 1);
+    param t1
+    t1 = call factorial, 1
+    t1 = fp[32] * t1
+    return t1
+endfunc
+```
+
+Con errores no se genera código intermedio. Los diagnósticos van con línea,
+columna, categoría y severidad:
 
 ```
 $ java -jar target/compiscript.jar tests/err_01_tipos.cps --quiet
@@ -81,9 +105,10 @@ java -jar target/compiscript.jar --ide tests/ok_07_completo.cps
 Editor con resaltado y números de línea a la izquierda; a la derecha las pestañas
 **Árbol sintáctico** (diagrama de nodos y aristas, con zoom y exportación a
 DOT/PNG), **Tabla de símbolos** (árbol de entornos y, al seleccionar uno, sus
-símbolos con todos los atributos) y **Tokens**. Abajo, la tabla de **Errores**
+símbolos con todos los atributos, incluida su dirección), **Tokens**, **Código
+intermedio** y **Registros de activación**. Abajo, la tabla de **Errores**
 —sintaxis y semántica juntas, con severidad, categoría y ubicación— y la
-**Salida**.
+**Salida**. Con errores, las dos pestañas del código intermedio quedan vacías.
 
 | Atajo | Acción |
 |---|---|
@@ -114,16 +139,38 @@ batería se rompe en los dos sentidos, cuando una regla deja de detectarse y
 cuando aparece un falso positivo nuevo. Los casos `ok_` importan tanto como los
 `err_`: son los que atrapan los falsos positivos.
 
-Al final imprime la **matriz de cobertura** de las 27 reglas semánticas del
-enunciado, y **una regla sin cubrir hace fallar la batería** igual que una prueba
-en rojo:
+Los casos de código intermedio viven en [`tests/tac/`](tests/tac). Cada uno
+tiene al lado su `.tac` esperado y declara qué construcciones traduce:
 
 ```
-Cobertura de las 27 reglas semanticas del enunciado:
+// @esperado: TAC
+// @genera: I11, I12, I13, I18
+```
+
+La batería compara el TAC generado línea por línea y, si difiere, señala la
+primera línea distinta. También comprueba que ningún programa con errores
+produzca código intermedio. Para regenerar un `.tac` después de un cambio
+intencional:
+
+```bash
+java -jar target/compiscript.jar tests/tac/ok_05_clases.cps --tac > tests/tac/ok_05_clases.tac
+```
+
+y revisarlo a mano contra el fuente antes de commitearlo.
+
+Al final imprime dos **matrices de cobertura**: las 29 reglas semánticas y las
+24 construcciones que se traducen a TAC. **Una regla o construcción sin cubrir
+hace fallar la batería** igual que una prueba en rojo:
+
+```
+Cobertura de las 29 reglas semanticas:
   T1  [ok |err]  aritmetica (+,-,*,/) sobre integer o float
   ...
-  A5  [ok |n/a]  un entorno nuevo por cada funcion, clase y bloque   (regla de capacidad)
-  todas las reglas tienen los casos que el enunciado pide
+Cobertura de la generacion de codigo intermedio (24 construcciones):
+  I01 [tac]  aritmetica (+,-,*,/,%) con precedencia y asociatividad
+  ...
+  casos fallidos: 16 programa(s) con errores, ninguno genero codigo intermedio
+  todas las construcciones tienen su caso
 ```
 
 ## Con Docker
@@ -133,6 +180,7 @@ docker compose up -d --build
 docker compose exec compiscript ./mvnw clean verify
 docker compose exec compiscript java -jar target/compiscript.jar --test tests
 docker compose exec compiscript java -jar target/compiscript.jar examples/ok_basico.cps --dot
+docker compose exec compiscript java -jar target/compiscript.jar tests/tac/ok_06_herencia.cps --tac
 ```
 
 La imagen trae Graphviz, así que ahí `--dot` sí produce el `.png`.
@@ -146,13 +194,15 @@ src/main/java/com/uvg/compiscript/
   Main.java                 driver de línea de comandos
   SyntaxErrorListener.java  acumula los errores de sintaxis en vez de escribirlos a stderr
   types/                    sistema de tipos
-  symbols/                  tabla de símbolos y ámbitos
-  semantic/                 analizador: SemanticVisitor, TypeRules, ErrorReporter
-  compiler/                 CompilerService: las cuatro fases en un solo lugar
+  symbols/                  tabla de símbolos, ámbitos y distribución de memoria
+  semantic/                 analizador: SemanticVisitor, TypeRules, anotaciones del árbol
+  codegen/                  generador de TAC, temporales y registros de activación
+  compiler/                 CompilerService: todas las fases en un solo lugar
   ide/                      IDE Swing
-  tools/                    exportador DOT, arnés de pruebas y catálogo de reglas
+  tools/                    exportador DOT, arnés de pruebas y catálogos de cobertura
 examples/                   programas .cps de ejemplo
-tests/                      batería de pruebas
+tests/                      batería semántica
+tests/tac/                  batería de código intermedio (.cps y su .tac esperado)
 ```
 
 Los archivos que ANTLR genera (`CompiscriptLexer.java`, `CompiscriptParser.java`,
