@@ -48,7 +48,16 @@ endfunc
 ```
 
 `func etiqueta, n` abre una función cuyo registro de activación ocupa `n`
-bytes; `endfunc` la cierra y equivale a un `return` sin valor. Las líneas
+bytes; `endfunc` la cierra y equivale a un `return` sin valor.
+
+Las etiquetas se forman así: una función del nivel superior usa su nombre; una
+anidada lleva delante la etiqueta de su contenedora (`crearContador.avanzar`);
+un método, el nombre de su clase (`Punto.mover`). El compilador inventa tres:
+`main`, `Clase.vtable` y `Clase.init`. Toda etiqueta es única. Si un nombre del
+programa choca con una ya asignada (una función llamada `main`, un método
+llamado `init`, dos funciones homónimas en bloques hermanos), la segunda
+recibe el sufijo `$2`, `$3`… Como `$` no puede aparecer en un identificador,
+el sufijo nunca vuelve a chocar. Las líneas
 sangradas son instrucciones; las que terminan en `:` son etiquetas. Lo que va
 después de `;` es la sentencia del fuente que originó la instrucción. Es solo
 un comentario para leer el TAC junto al programa.
@@ -208,9 +217,10 @@ Cada función tiene su propio conjunto de temporales. El algoritmo es:
   de ellos.
 - Solo se liberan temporales. Las variables y las constantes no pertenecen al
   conjunto.
-- Un temporal que debe sobrevivir a un cuerpo completo, como la lista y el
-  índice de un `foreach` o el selector de un `switch`, se libera recién al
-  terminar ese cuerpo.
+- La lista y el índice de un `foreach` deben sobrevivir a todo el cuerpo, así
+  que se liberan recién al terminar el bucle. El selector de un `switch`, en
+  cambio, solo hace falta en la cadena de comparaciones: se libera antes de
+  los cuerpos de los `case`, que pueden reutilizar su temporal.
 
 Como siempre se reutiliza el menor libre, el total de temporales creados en una
 función es el máximo que estuvieron vivos a la vez, y eso es lo que se reserva
@@ -779,10 +789,10 @@ L2:
   las reglas semánticas `K5` y `K4`: sin ellas, un método tomado como valor
   perdería su `this`, y una llamada a través del tipo padre pasaría argumentos
   equivocados.
-- **Las clases declaradas dentro de una función no capturan sus variables.**
-  Sus métodos no reciben enlace de acceso.
-- **`main` es el nombre del programa.** Una función del usuario llamada `main`
-  compartiría etiqueta con él.
+- **Una clase declarada dentro de una función no usa las locales de esa
+  función.** Es la regla `K6`. Sus métodos se invocan por la tabla de métodos
+  y no reciben enlace de acceso, así que ese registro de activación les es
+  inalcanzable. Sí pueden usar sus propios atributos y los globales.
 - **`==` sobre `string` compara contenido; sobre objetos y listas, direcciones.**
 - **El `catch` recibe el mensaje como `string`,** que es el tipo que le da el
   análisis semántico.

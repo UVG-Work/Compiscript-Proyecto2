@@ -158,18 +158,18 @@ java -jar target/compiscript.jar tests/tac/ok_05_clases.cps --tac > tests/tac/ok
 
 y revisarlo a mano contra el fuente antes de commitearlo.
 
-Al final imprime dos **matrices de cobertura**: las 29 reglas semánticas y las
+Al final imprime dos **matrices de cobertura**: las 30 reglas semánticas y las
 24 construcciones que se traducen a TAC. **Una regla o construcción sin cubrir
 hace fallar la batería** igual que una prueba en rojo:
 
 ```
-Cobertura de las 29 reglas semanticas:
+Cobertura de las 30 reglas semanticas:
   T1  [ok |err]  aritmetica (+,-,*,/) sobre integer o float
   ...
 Cobertura de la generacion de codigo intermedio (24 construcciones):
   I01 [tac]  aritmetica (+,-,*,/,%) con precedencia y asociatividad
   ...
-  casos fallidos: 16 programa(s) con errores, ninguno genero codigo intermedio
+  casos fallidos: 17 programa(s) con errores, ninguno genero codigo intermedio
   todas las construcciones tienen su caso
 ```
 

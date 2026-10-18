@@ -230,11 +230,11 @@ contradiga con su ejemplo.
 | Código muerto | Error, un mensaje por tramo | El flag `unreachable` se reinicia tras reportar, para no dar un mensaje por cada sentencia sobrante. |
 | Declarada y no usada | Advertencia, no error | No impide compilar; no cuenta para el código de salida. |
 
-## Las 29 reglas semánticas y su cobertura
+## Las 30 reglas semánticas y su cobertura
 
 El enunciado pide una batería "que valide casos exitosos y fallidos **para cada
-regla semántica**". Son las 27 del enunciado más `K4` y `K5`, que agregó la
-generación de código. Las reglas se numeraron en
+regla semántica**". Son las 27 del enunciado más `K4`, `K5` y `K6`, que agregó
+la generación de código. Las reglas se numeraron en
 [`tools/RuleCatalog.java`](../src/main/java/com/uvg/compiscript/tools/RuleCatalog.java)
 y cada `.cps` de [`tests/`](../tests) declara cuáles ejercita:
 
@@ -253,7 +253,7 @@ y cada `.cps` de [`tests/`](../tests) declara cuáles ejercita:
 | Manejo de ámbito | `A1` resolución de nombres · `A2` variables no declaradas · `A3` redeclaración · `A4` bloques anidados · `A5` un entorno por función/clase/bloque |
 | Funciones | `F1` argumentos · `F2` retorno · `F3` recursión · `F4` anidadas y closures · `F5` redeclaración |
 | Control de flujo | `C1` condiciones `boolean` · `C2` `break`/`continue` · `C3` `return` |
-| Clases | `K1` atributos y métodos · `K2` constructor · `K3` `this` · `K4` sobrescritura con la misma firma · `K5` métodos solo invocados |
+| Clases | `K1` atributos y métodos · `K2` constructor · `K3` `this` · `K4` sobrescritura con la misma firma · `K5` métodos solo invocados · `K6` una clase local no usa las locales de su función |
 | Listas | `L1` tipo de los elementos · `L2` índices |
 | Generales | `G1` código muerto · `G2` sentido semántico · `G3` declaraciones duplicadas |
 
@@ -327,19 +327,32 @@ va entera al salto (`ifFalse a < b goto L`) en vez de calcular un booleano y
 preguntar por él. La constante `true` no emite salto, así que `while (true)`
 no tiene una comparación inútil.
 
-### Despacho dinámico y las dos reglas nuevas
+### Despacho dinámico y las tres reglas nuevas
 
 TypeScript invoca el método del objeto, no el de la variable, así que la
 llamada busca la dirección en la tabla de métodos del objeto. Para que eso sea
-correcto hicieron falta dos reglas semánticas:
+correcto hicieron falta tres reglas semánticas:
 
 - **`K4`:** una sobrescritura conserva la firma. Sin ella, `Perro.hablar(x)`
   sobrescribiendo `Animal.hablar()` pasaba el análisis, y una llamada a través
   de una variable `Animal` le pasaba un argumento de menos.
 - **`K5`:** un método solo se usa invocándolo. `let m = obj.metodo;` pasaba el
   análisis, pero un valor función no tiene dónde llevar `this`.
+- **`K6`:** una clase declarada dentro de una función no usa las locales de esa
+  función. Un método llamado por la tabla no recibe enlace de acceso, y el
+  generador terminaba emitiendo `access -1`. `crossesClass` lo detecta al
+  resolver el nombre: subir desde el uso hasta la declaración atraviesa un
+  ámbito de clase.
 
-Ninguna relaja una regla existente: las dos agregan errores.
+Ninguna relaja una regla existente: las tres agregan errores.
+
+### Etiquetas únicas
+
+Las etiquetas salen del camino léxico (`externa.media.interna`, `Punto.mover`),
+pero eso solo no basta: dos funciones homónimas en bloques hermanos, una
+función llamada `main` o un método llamado `init` producían dos `func` con la
+misma etiqueta. Toda etiqueta pasa por `MemoryLayout`, que reserva primero las
+que inventa el compilador y, ante un choque, agrega `$n`.
 
 ### `new` y los valores iniciales de los atributos
 
