@@ -20,7 +20,6 @@ public class Scope {
     private final Scope parent;
     private final List<Scope> children = new ArrayList<>();
     private final Map<String, Symbol> symbols = new LinkedHashMap<>();
-    private int size;
     private FunctionSymbol owner;
 
     public Scope(String name, Kind kind, Scope parent) {
@@ -39,10 +38,6 @@ public class Scope {
         }
         symbols.put(symbol.getName(), symbol);
         symbol.setScope(this);
-        if (symbol.getType() != null) {
-            symbol.setOffset(size);
-            size += symbol.getType().size();
-        }
         return true;
     }
 
@@ -132,8 +127,14 @@ public class Scope {
         return symbols.values();
     }
 
-    /** Bytes ocupados por los simbolos declarados aqui. */
+    /** Bytes de memoria de los simbolos declarados aqui; funciones y clases no ocupan. */
     public int getSize() {
+        int size = 0;
+        for (Symbol symbol : symbols.values()) {
+            if (!(symbol instanceof FunctionSymbol) && !(symbol instanceof ClassSymbol)) {
+                size += symbol.getSize();
+            }
+        }
         return size;
     }
 
@@ -146,7 +147,7 @@ public class Scope {
     private void dump(StringBuilder sb, int depth) {
         String indent = "  ".repeat(depth);
         sb.append(String.format("%s[%s] %s (profundidad %d, %d bytes)%n",
-                indent, kind, name, depth, size));
+                indent, kind, name, depth, getSize()));
         if (symbols.isEmpty()) {
             sb.append(indent).append("  (vacio)").append(System.lineSeparator());
         }
