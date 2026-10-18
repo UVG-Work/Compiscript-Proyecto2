@@ -15,7 +15,9 @@ import com.uvg.compiscript.types.Type;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.misc.Interval;
 import org.antlr.v4.runtime.tree.ParseTree;
@@ -31,7 +33,11 @@ import org.antlr.v4.runtime.tree.TerminalNode;
  */
 public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
 
+    private static final String THIS = "fp[" + MemoryLayout.THIS_OFFSET + "]";
+
     private final Annotations notes;
+    private final Map<ClassSymbol, CompiscriptParser.ClassDeclarationContext> classDeclarations =
+            new HashMap<>();
     private final Scope global;
     private final List<FunctionCode> functions = new ArrayList<>();
     private final List<ClassSymbol> classes = new ArrayList<>();
@@ -47,6 +53,7 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
     }
 
     public TacProgram generate(ParseTree tree) {
+        collectClasses(tree);
         visit(tree);
         return new TacProgram(functions, classes, global);
     }
@@ -347,19 +354,123 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         return null;
     }
 
+    /** Un bucle por indice; la lista y el indice viven en temporales durante todo el cuerpo. */
     @Override
     public String visitForeachStatement(CompiscriptParser.ForeachStatementContext ctx) {
-        throw unsupported("foreach");
+        Type element = ((ArrayType) notes.type(ctx.expression())).getElementType();
+        String array = toTemp(visit(ctx.expression()));
+        String index = temp();
+        emit(index + " = 0");
+        String test = newLabel();
+        String next = newLabel();
+        String end = newLabel();
+        mark(test);
+        String length = temp();
+        emit(length + " = " + array + "[0]");
+        emit("if " + index + " >= " + length + " goto " + end);
+        free(length);
+        String offset = temp();
+        emit(offset + " = " + index + " * " + element.size());
+        emit(offset + " = " + offset + " + " + MemoryLayout.ARRAY_HEADER);
+        free(offset);
+        String item = temp();
+        emit(item + " = " + array + "[" + offset + "]");
+        store(notes.symbol(ctx), item);
+        free(item);
+        loopBody(ctx.block(), end, next);
+        mark(next);
+        emit(index + " = " + index + " + 1");
+        emit("goto " + test);
+        mark(end);
+        free(index);
+        free(array);
+        return null;
     }
 
+    /** Si algo falla dentro del rango protegido, el mensaje queda en la variable del catch. */
     @Override
     public String visitTryCatchStatement(CompiscriptParser.TryCatchStatementContext ctx) {
-        throw unsupported("try/catch");
+        String handler = newLabel();
+        String end = newLabel();
+        emit("try " + handler + ", " + notes.symbol(ctx).getAddress());
+        visit(ctx.block(0));
+        emit("endtry");
+        emit("goto " + end);
+        mark(handler);
+        visit(ctx.block(1));
+        mark(end);
+        return null;
     }
 
     @Override
     public String visitClassDeclaration(CompiscriptParser.ClassDeclarationContext ctx) {
-        throw unsupported("clases");
+        ClassSymbol type = (ClassSymbol) notes.symbol(ctx);
+        classes.add(type);
+        if (hasInitializer(type)) {
+            initializer(type, ctx);
+        }
+        for (CompiscriptParser.ClassMemberContext member : ctx.classMember()) {
+            if (member.functionDeclaration() != null) {
+                visit(member.functionDeclaration());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * {@code Clase.init} recibe el objeto y le pone los valores iniciales de sus
+     * atributos, empezando por los del padre. Solo existe si en la cadena hay
+     * algun atributo con valor inicial.
+     */
+    private void initializer(ClassSymbol type, CompiscriptParser.ClassDeclarationContext ctx) {
+        FunctionSymbol init = new FunctionSymbol("init", ctx.Identifier(0).getSymbol());
+        init.setOwner(type);
+        init.setReturnType(PrimitiveType.VOID);
+        init.setLabel(type.getName() + ".init");
+        init.setLocalsEnd(MemoryLayout.FRAME_HEADER + MemoryLayout.WORD);
+        FunctionCode code = open(init.getLabel(), init);
+        if (type.getParent() != null && hasInitializer(type.getParent())) {
+            emit("param " + THIS);
+            emit("call " + type.getParent().getName() + ".init, 1");
+        }
+        for (CompiscriptParser.ClassMemberContext member : ctx.classMember()) {
+            ParserRuleContext declaration = member.variableDeclaration() != null
+                    ? member.variableDeclaration() : member.constantDeclaration();
+            CompiscriptParser.ExpressionContext initial = initialValue(member);
+            if (initial == null) {
+                continue;
+            }
+            Symbol field = type.getMemberScope().resolveLocal(
+                    declaration.getChild(1).getText());
+            comment = source(declaration);
+            String value = value(initial, field.getType());
+            storeField(THIS, field, value);
+            free(value);
+        }
+        close(code);
+    }
+
+    private boolean hasInitializer(ClassSymbol type) {
+        for (ClassSymbol c = type; c != null; c = c.getParent()) {
+            CompiscriptParser.ClassDeclarationContext declaration = classDeclarations.get(c);
+            if (declaration != null && declaration.classMember().stream()
+                    .anyMatch(member -> initialValue(member) != null)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static CompiscriptParser.ExpressionContext initialValue(
+            CompiscriptParser.ClassMemberContext member) {
+        if (member.constantDeclaration() != null) {
+            return member.constantDeclaration().expression();
+        }
+        if (member.variableDeclaration() != null
+                && member.variableDeclaration().initializer() != null) {
+            return member.variableDeclaration().initializer().expression();
+        }
+        return null;
     }
 
     // ------------------------------------------------------------------
@@ -429,16 +540,38 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         return temp;
     }
 
+    /**
+     * En un metodo {@code this} esta en su propio marco. Desde una funcion
+     * anidada en un metodo hay que subir por los enlaces de acceso hasta el
+     * marco del metodo y leerlo de ahi.
+     */
     private String thisPointer() {
-        throw unsupported("this");
+        FunctionSymbol current = stack.peek().symbol;
+        if (current != null && current.isMethod()) {
+            return THIS;
+        }
+        for (Scope scope = currentBody(); scope != null; scope = scope.getParent()) {
+            if (scope.getOwner() != null && scope.getOwner().isMethod()) {
+                String frame = access(depth() - scope.getFunctionDepth());
+                emit(frame + " = " + frame + "[" + MemoryLayout.THIS_OFFSET + "]");
+                return frame;
+            }
+        }
+        throw new IllegalStateException("'this' fuera de un metodo");
     }
 
     private void storeField(String object, Symbol field, String value) {
-        throw unsupported("atributos");
+        String base = toTemp(object);
+        emit(base + "[" + field.getOffset() + "] = " + value);
+        free(base);
     }
 
     private String readField(String object, Symbol field) {
-        throw unsupported("atributos");
+        String base = toTemp(object);
+        free(base);
+        String temp = temp();
+        emit(temp + " = " + base + "[" + field.getOffset() + "]");
+        return temp;
     }
 
     // ------------------------------------------------------------------
@@ -662,14 +795,26 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         return ctx.arrayLiteral() != null ? visit(ctx.arrayLiteral()) : ctx.getText();
     }
 
+    /** La longitud va en el encabezado y los elementos uno tras otro, cada uno de su tamano. */
     @Override
     public String visitArrayLiteral(CompiscriptParser.ArrayLiteralContext ctx) {
-        throw unsupported("listas");
+        int size = ((ArrayType) notes.type(ctx)).getElementType().size();
+        List<CompiscriptParser.ExpressionContext> items = ctx.expression();
+        String array = temp();
+        emit(array + " = alloc " + (MemoryLayout.ARRAY_HEADER + items.size() * size));
+        emit(array + "[0] = " + items.size());
+        for (int i = 0; i < items.size(); i++) {
+            String item = visit(items.get(i));
+            emit(array + "[" + (MemoryLayout.ARRAY_HEADER + i * size) + "] = " + item);
+            free(item);
+        }
+        return array;
     }
 
     @Override
     public String visitIdentifierExpr(CompiscriptParser.IdentifierExprContext ctx) {
-        return load(notes.symbol(ctx));
+        Symbol symbol = notes.symbol(ctx);
+        return symbol instanceof FunctionSymbol function ? functionValue(function) : load(symbol);
     }
 
     @Override
@@ -677,9 +822,28 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         return thisPointer();
     }
 
+    /** Reservar, apuntar a la tabla de metodos, valores iniciales y constructor. */
     @Override
     public String visitNewExpr(CompiscriptParser.NewExprContext ctx) {
-        throw unsupported("new");
+        ClassSymbol type = (ClassSymbol) notes.symbol(ctx);
+        FunctionSymbol constructor = type.resolveMember("constructor") instanceof FunctionSymbol f
+                ? f : null;
+        List<String> arguments = constructor == null ? new ArrayList<>()
+                : arguments(ctx.arguments(), (FunctionType) constructor.getType());
+        String object = temp();
+        emit(object + " = alloc " + type.getInstanceSize());
+        emit(object + "[0] = " + type.getVtableLabel());
+        if (hasInitializer(type)) {
+            emit("param " + object);
+            emit("call " + type.getName() + ".init, 1");
+        }
+        if (constructor != null) {
+            arguments.add(0, object);
+            arguments.forEach(argument -> emit("param " + argument));
+            arguments.stream().skip(1).forEach(this::free);
+            emit("call " + constructor.getLabel() + ", " + arguments.size());
+        }
+        return object;
     }
 
     // ------------------------------------------------------------------
@@ -731,19 +895,52 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         return position == 0 ? notes.type(ctx.primaryAtom()) : notes.type(ctx.suffixOp(position - 1));
     }
 
+    /** {@code length} es la unica propiedad de una lista y vive en su encabezado. */
     private String readProperty(String object, CompiscriptParser.PropertyAccessExprContext property,
                                 Type objectType) {
-        throw unsupported("propiedades");
+        if (!(objectType instanceof ArrayType)) {
+            return readField(object, notes.symbol(property));
+        }
+        String base = toTemp(object);
+        free(base);
+        String temp = temp();
+        emit(temp + " = " + base + "[0]");
+        return temp;
     }
 
     private String readElement(String array, CompiscriptParser.IndexExprContext index,
                                ArrayType type) {
-        throw unsupported("listas");
+        String base = toTemp(array);
+        String offset = elementOffset(visit(index.expression()), type.getElementType());
+        free(base);
+        free(offset);
+        String temp = temp();
+        emit(temp + " = " + base + "[" + offset + "]");
+        return temp;
     }
 
     private String storeElement(String array, CompiscriptParser.IndexExprContext index,
                                 ArrayType type, ParseTree value) {
-        throw unsupported("listas");
+        String base = toTemp(array);
+        String offset = elementOffset(visit(index.expression()), type.getElementType());
+        String stored = value(value, type.getElementType());
+        emit(base + "[" + offset + "] = " + stored);
+        free(base);
+        free(offset);
+        return stored;
+    }
+
+    /** Bytes desde el inicio de la lista: encabezado + indice * tamano del elemento. */
+    private String elementOffset(String index, Type element) {
+        int size = element.size();
+        if (index.matches("\\d+")) {
+            return String.valueOf(MemoryLayout.ARRAY_HEADER + Integer.parseInt(index) * size);
+        }
+        free(index);
+        String offset = temp();
+        emit(offset + " = " + index + " * " + size);
+        emit(offset + " = " + offset + " + " + MemoryLayout.ARRAY_HEADER);
+        return offset;
     }
 
     // ------------------------------------------------------------------
@@ -754,7 +951,7 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         if (function.isMethod()) {
             return callMethod(thisPointer(), function, call);
         }
-        List<String> arguments = arguments(call, (FunctionType) function.getType());
+        List<String> arguments = arguments(call.arguments(), (FunctionType) function.getType());
         String link = function.getScope().enclosingFunction() == null ? null : staticLink(function);
         return call(function.getLabel(), arguments, link, function.getReturnType());
     }
@@ -768,10 +965,11 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         return levels == 0 ? "fp" : access(levels);
     }
 
-    private List<String> arguments(CompiscriptParser.CallExprContext call, FunctionType signature) {
+    private List<String> arguments(CompiscriptParser.ArgumentsContext arguments,
+                                   FunctionType signature) {
         List<String> values = new ArrayList<>();
-        if (call.arguments() != null) {
-            List<CompiscriptParser.ExpressionContext> expressions = call.arguments().expression();
+        if (arguments != null) {
+            List<CompiscriptParser.ExpressionContext> expressions = arguments.expression();
             for (int i = 0; i < expressions.size(); i++) {
                 values.add(value(expressions.get(i), signature.getParameterTypes().get(i)));
             }
@@ -799,18 +997,49 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         return result;
     }
 
+    /**
+     * Despacho dinamico: la direccion del metodo sale de la tabla del objeto,
+     * asi que un metodo sobrescrito se ejecuta aunque la variable sea del tipo
+     * padre. La ranura es la misma en toda la jerarquia.
+     */
     private String callMethod(String object, FunctionSymbol method,
                               CompiscriptParser.CallExprContext call) {
-        throw unsupported("metodos");
+        List<String> arguments = arguments(call.arguments(), (FunctionType) method.getType());
+        int slot = method.getOwner().slotOf(method.getName());
+        String target = temp();
+        if (TempPool.isTemp(object)) {
+            emit(target + " = " + object + "[0]");
+        } else {
+            emit(target + " = " + object);
+            emit(target + " = " + target + "[0]");
+        }
+        emit(target + " = " + target + "[" + slot * MemoryLayout.WORD + "]");
+        arguments.add(0, object);
+        return call(target, arguments, null, method.getReturnType());
     }
 
+    /** Un valor funcion es el par {etiqueta, enlace de acceso}; la llamada lee los dos. */
     private String callValue(String function, CompiscriptParser.CallExprContext call,
                              FunctionType signature) {
-        throw unsupported("llamadas indirectas");
+        List<String> arguments = arguments(call.arguments(), signature);
+        String pair = toTemp(function);
+        String target = temp();
+        emit(target + " = " + pair + "[0]");
+        String link = temp();
+        emit(link + " = " + pair + "[" + MemoryLayout.WORD + "]");
+        free(pair);
+        return call(target, arguments, link, signature.getReturnType());
     }
 
     private String functionValue(FunctionSymbol function) {
-        throw unsupported("funciones como valor");
+        String link = function.getScope().enclosingFunction() == null ? "null"
+                : staticLink(function);
+        String pair = temp();
+        emit(pair + " = alloc " + 2 * MemoryLayout.WORD);
+        emit(pair + "[0] = " + function.getLabel());
+        emit(pair + "[" + MemoryLayout.WORD + "] = " + link);
+        free(link);
+        return pair;
     }
 
     // ------------------------------------------------------------------
@@ -927,7 +1156,14 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
                 .replaceAll("\\s+", " ");
     }
 
-    private static IllegalStateException unsupported(String what) {
-        return new IllegalStateException("generacion de codigo aun no soportada: " + what);
+    /** Las clases pueden declararse despues de usarse, asi que se ubican antes de generar. */
+    private void collectClasses(ParseTree node) {
+        if (node instanceof CompiscriptParser.ClassDeclarationContext declaration
+                && notes.symbol(declaration) instanceof ClassSymbol type) {
+            classDeclarations.put(type, declaration);
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            collectClasses(node.getChild(i));
+        }
     }
 }

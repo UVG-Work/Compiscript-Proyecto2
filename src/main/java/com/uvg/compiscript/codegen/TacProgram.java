@@ -29,10 +29,10 @@ public final class TacProgram {
     public String render() {
         StringBuilder out = new StringBuilder();
         for (ClassSymbol type : classes) {
-            out.append("vtable ").append(type.getVtableLabel()).append(": ")
-                    .append(type.getVtable().stream().map(FunctionSymbol::getLabel)
-                            .collect(Collectors.joining(", ")))
-                    .append('\n');
+            String methods = type.getVtable().stream().map(FunctionSymbol::getLabel)
+                    .collect(Collectors.joining(", "));
+            out.append("vtable ").append(type.getVtableLabel()).append(':')
+                    .append(methods.isEmpty() ? "" : " " + methods).append('\n');
         }
         for (FunctionCode function : functions) {
             if (!out.isEmpty()) {
