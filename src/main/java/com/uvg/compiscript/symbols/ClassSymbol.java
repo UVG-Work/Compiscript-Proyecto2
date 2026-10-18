@@ -10,6 +10,8 @@ public class ClassSymbol extends Symbol {
     private ClassSymbol parent;
     private Scope memberScope;
     private int instanceSize = -1;
+    private String vtableLabel;
+    private String initLabel;
     private final List<VariableSymbol> fields = new ArrayList<>();
     private final List<FunctionSymbol> vtable = new ArrayList<>();
 
@@ -79,7 +81,20 @@ public class ClassSymbol extends Symbol {
     }
 
     public String getVtableLabel() {
-        return getName() + ".vtable";
+        return vtableLabel;
+    }
+
+    public void setVtableLabel(String vtableLabel) {
+        this.vtableLabel = vtableLabel;
+    }
+
+    /** La funcion que pone los valores iniciales de los atributos. */
+    public String getInitLabel() {
+        return initLabel;
+    }
+
+    public void setInitLabel(String initLabel) {
+        this.initLabel = initLabel;
     }
 
     @Override

@@ -64,7 +64,7 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
 
     @Override
     public String visitProgram(CompiscriptParser.ProgramContext ctx) {
-        FunctionCode main = open("main", null);
+        FunctionCode main = open(MemoryLayout.MAIN, null);
         ctx.statement().forEach(this::visit);
         close(main);
         return null;
@@ -426,12 +426,12 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         FunctionSymbol init = new FunctionSymbol("init", ctx.Identifier(0).getSymbol());
         init.setOwner(type);
         init.setReturnType(PrimitiveType.VOID);
-        init.setLabel(type.getName() + ".init");
+        init.setLabel(type.getInitLabel());
         init.setLocalsEnd(MemoryLayout.FRAME_HEADER + MemoryLayout.WORD);
         FunctionCode code = open(init.getLabel(), init);
         if (type.getParent() != null && hasInitializer(type.getParent())) {
             emit("param " + THIS);
-            emit("call " + type.getParent().getName() + ".init, 1");
+            emit("call " + type.getParent().getInitLabel() + ", 1");
         }
         for (CompiscriptParser.ClassMemberContext member : ctx.classMember()) {
             ParserRuleContext declaration = member.variableDeclaration() != null
@@ -847,7 +847,7 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         emit(object + "[0] = " + type.getVtableLabel());
         if (hasInitializer(type)) {
             emit("param " + object);
-            emit("call " + type.getName() + ".init, 1");
+            emit("call " + type.getInitLabel() + ", 1");
         }
         if (constructor != null) {
             arguments.add(0, object);
