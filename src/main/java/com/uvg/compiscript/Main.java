@@ -1,6 +1,5 @@
 package com.uvg.compiscript;
 
-import com.uvg.compiscript.codegen.CodeGenerator;
 import com.uvg.compiscript.compiler.CompilationResult;
 import com.uvg.compiscript.compiler.CompilerService;
 import com.uvg.compiscript.ide.IdeApp;
@@ -20,7 +19,7 @@ import org.antlr.v4.runtime.tree.Trees;
 /**
  * Driver de linea de comandos.
  *
- *   java -jar compiscript.jar programa.cps [--tree] [--tokens] [--dot] [--quiet]
+ *   java -jar compiscript.jar programa.cps [--tree] [--tokens] [--dot] [--quiet] [--tac]
  *   java -jar compiscript.jar --test tests
  *   java -jar compiscript.jar --ide
  *
@@ -38,7 +37,7 @@ public class Main {
               --tree     imprime el arbol de parseo en texto
               --tokens   imprime la secuencia de tokens del lexer
               --dot      exporta el arbol a .dot y, si hay graphviz, a .png
-              --quiet    no imprime la tabla de simbolos
+              --quiet    no imprime la tabla de simbolos ni los registros de activacion
               --tac      imprime solo el codigo intermedio""";
 
     public static void main(String[] args) throws IOException {
@@ -104,8 +103,7 @@ public class Main {
             result.errors().forEach(error -> System.err.println("  " + error));
             return 1;
         }
-        System.out.print(new CodeGenerator(result.annotations(), result.globalScope())
-                .generate(result.tree()).render());
+        System.out.print(result.tac().render());
         return 0;
     }
 
@@ -153,6 +151,12 @@ public class Main {
             return 1;
         }
 
+        System.out.println("Codigo intermedio:");
+        System.out.print(result.tac().render());
+        if (!quiet) {
+            System.out.println("Memoria y registros de activacion:");
+            System.out.print(result.tac().recordsText());
+        }
         System.out.println("RESULTADO: OK, sin errores.");
         return 0;
     }

@@ -1,6 +1,6 @@
 package com.uvg.compiscript.compiler;
 
-import com.uvg.compiscript.semantic.Annotations;
+import com.uvg.compiscript.codegen.TacProgram;
 import com.uvg.compiscript.semantic.SemanticError;
 import com.uvg.compiscript.semantic.SemanticError.Severity;
 import com.uvg.compiscript.symbols.Scope;
@@ -13,6 +13,9 @@ import org.antlr.v4.runtime.tree.ParseTree;
  * Todo lo que produce una compilacion, para que el CLI y el IDE consuman lo
  * mismo.
  *
+ * <p>{@code tac} es null si hubo cualquier error: el codigo intermedio solo se
+ * genera para programas validos.
+ *
  * <p>Los errores de sintaxis y los semanticos llegan en una sola lista
  * ({@code diagnostics}): el enunciado pide reportarlos "con su tipo y ubicacion"
  * y una tabla unica es lo que el IDE necesita.
@@ -23,7 +26,7 @@ public record CompilationResult(String origin,
                                 ParseTree tree,
                                 List<SemanticError> diagnostics,
                                 Scope globalScope,
-                                Annotations annotations,
+                                TacProgram tac,
                                 boolean parsedCleanly) {
 
     public List<SemanticError> errors() {

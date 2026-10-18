@@ -1,6 +1,8 @@
 package com.uvg.compiscript.compiler;
 
 import com.uvg.compiscript.SyntaxErrorListener;
+import com.uvg.compiscript.codegen.CodeGenerator;
+import com.uvg.compiscript.codegen.TacProgram;
 import com.uvg.compiscript.parser.CompiscriptLexer;
 import com.uvg.compiscript.parser.CompiscriptParser;
 import com.uvg.compiscript.semantic.SemanticAnalyzer;
@@ -19,8 +21,9 @@ import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
 
 /**
- * Las cuatro fases en un solo lugar: lexer, parser, recoleccion de errores de
- * sintaxis y analisis semantico.
+ * Las fases en un solo lugar: lexer, parser, recoleccion de errores de
+ * sintaxis, analisis semantico, distribucion de memoria y, si no hubo errores,
+ * generacion de codigo intermedio.
  */
 public final class CompilerService {
 
@@ -66,8 +69,10 @@ public final class CompilerService {
         diagnostics.sort(Comparator.comparingInt(SemanticError::line)
                 .thenComparingInt(SemanticError::column));
 
+        TacProgram tac = analyzer.hasErrors() ? null
+                : new CodeGenerator(analyzer.getAnnotations(), analyzer.getGlobalScope())
+                        .generate(tree);
         return new CompilationResult(origin, parser, tokens, tree,
-                List.copyOf(diagnostics), analyzer.getGlobalScope(),
-                analyzer.getAnnotations(), true);
+                List.copyOf(diagnostics), analyzer.getGlobalScope(), tac, true);
     }
 }

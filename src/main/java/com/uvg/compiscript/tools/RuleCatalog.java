@@ -5,8 +5,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Las reglas semanticas del enunciado, numeradas para que cada caso de prueba
- * declare cuales ejercita y el arnes pueda demostrar cobertura.
+ * Las reglas semanticas y las construcciones que se traducen a codigo
+ * intermedio, numeradas para que cada caso de prueba declare cuales ejercita y
+ * el arnes pueda demostrar cobertura.
  *
  * <p>Tres de ellas son <em>de capacidad</em>: describen algo que el lenguaje debe
  * soportar, no algo que un programa pueda violar. No tiene sentido pedirles un
@@ -55,6 +56,36 @@ public final class RuleCatalog {
         RULES.put("G1", "deteccion de codigo muerto");
         RULES.put("G2", "sentido semantico en expresiones (no multiplicar funciones)");
         RULES.put("G3", "declaraciones duplicadas (variables, parametros)");
+    }
+
+    /** Lo que el enunciado pide traducir a codigo intermedio, mas lo que el lenguaje agrega. */
+    public static final Map<String, String> GENERATION = new LinkedHashMap<>();
+
+    static {
+        GENERATION.put("I01", "aritmetica (+,-,*,/,%) con precedencia y asociatividad");
+        GENERATION.put("I02", "logicas (&&, ||, !) con cortocircuito");
+        GENERATION.put("I03", "comparaciones (==, !=, <, <=, >, >=)");
+        GENERATION.put("I04", "declaracion y asignacion de variables y constantes");
+        GENERATION.put("I05", "if/else");
+        GENERATION.put("I06", "while");
+        GENERATION.put("I07", "do-while");
+        GENERATION.put("I08", "for");
+        GENERATION.put("I09", "switch");
+        GENERATION.put("I10", "break y continue hacia el bucle que los contiene");
+        GENERATION.put("I11", "definicion de funciones, parametros, llamadas y retorno");
+        GENERATION.put("I12", "funciones recursivas");
+        GENERATION.put("I13", "funciones anidadas y closures (enlace de acceso)");
+        GENERATION.put("I14", "creacion de objetos e invocacion del constructor");
+        GENERATION.put("I15", "atributos, metodos y this");
+        GENERATION.put("I16", "creacion de listas y acceso por indice");
+        GENERATION.put("I17", "reciclaje de temporales");
+        GENERATION.put("I18", "registros de activacion");
+        GENERATION.put("I19", "herencia y despacho dinamico");
+        GENERATION.put("I20", "foreach");
+        GENERATION.put("I21", "try/catch");
+        GENERATION.put("I22", "promocion de integer a float y concatenacion");
+        GENERATION.put("I23", "operador ternario");
+        GENERATION.put("I24", "funciones como valor (llamada indirecta)");
     }
 
     private RuleCatalog() {
