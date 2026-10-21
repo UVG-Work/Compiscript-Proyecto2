@@ -91,7 +91,8 @@ columna, categoría y severidad:
 ```
 $ java -jar target/compiscript.jar tests/err_01_tipos.cps --quiet
 Errores semanticos (8):
-  linea 8:22 [TIPOS/error] no se puede aplicar '+' a integer y string
+  linea 8:0 [TIPOS/error] no se puede inicializar 'malo' de tipo integer con un valor string
+  linea 9:22 [TIPOS/error] no se puede aplicar '+' a integer y string
   ...
 ```
 

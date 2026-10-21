@@ -5,9 +5,10 @@ código de tres direcciones (TAC). Cubre los operandos, las instrucciones, el
 modelo de memoria, la convención de llamada y el manejo de temporales, con un
 ejemplo de traducción por construcción y la lista de supuestos.
 
-Todos los ejemplos están copiados de la salida real del compilador. El programa
-completo de cada uno está en [`tests/tac/`](../tests/tac), junto a su `.tac`
-esperado, y la batería verifica que la salida no cambie.
+Todos los ejemplos están copiados de la salida real del compilador; `...` marca
+líneas omitidas entre dos fragmentos. El programa completo de cada uno está en
+[`tests/tac/`](../tests/tac), junto a su `.tac` esperado, y la batería
+verifica que la salida no cambie.
 
 ```bash
 java -jar target/compiscript.jar tests/tac/ok_03_funciones.cps --tac
@@ -35,7 +36,7 @@ implícita `main`; después siguen las funciones del fuente, en el orden en que
 aparecen. Si hay clases, sus tablas de métodos van al principio.
 
 ```
-vtable Punto.vtable: Punto.mover, Punto.norma
+vtable Punto.vtable: Punto.mover, Punto.norma, Punto.escalar
 
 func main, 48
     t1 = alloc 24                   ; let p: Punto = new Punto(3, 4);
@@ -605,8 +606,9 @@ endfunc
 
 `Clase.init` solo existe si la clase, o alguno de sus ancestros, tiene
 atributos con valor inicial, y empieza llamando al `init` del padre. Un
-atributo usado sin `this` dentro de un método se traduce igual que
-`this.atributo`.
+atributo propio usado sin `this` dentro de un método se traduce igual que
+`this.atributo`. Un atributo heredado necesita `this`: el análisis semántico
+solo busca nombres sueltos en la clase misma, no en sus ancestros.
 
 ### Métodos y despacho dinámico
 
@@ -657,6 +659,7 @@ matriz[1][0] = 9;
     t1[12] = 8
     t1[16] = 15
     G[0] = t1
+    ...
     t1 = G[0]                       ; numeros[1] = numeros[0] + numeros[2];
     t2 = G[0]
     t2 = t2[8]
@@ -664,6 +667,7 @@ matriz[1][0] = 9;
     t3 = t3[16]
     t2 = t2 + t3
     t1[12] = t2
+    ...
     t1 = G[16]                      ; matriz[1][0] = 9;
     t1 = t1[16]
     t1[8] = 9
@@ -777,8 +781,18 @@ L2:
   La gramática no tiene tipos función, así que no se puede declarar un
   parámetro ni un retorno de ese tipo. Por eso los registros de activación
   viven en una pila y alcanza con el enlace de acceso. El único escape posible
-  sería asignar una función anidada a una variable global de la misma firma, y
-  no está soportado.
+  es asignar una función anidada a una variable global de la misma firma
+  (`let g = top;` y, dentro de una función, `g = interna;`). No está
+  soportado y el compilador no lo detecta: llamar a `g` después de que la
+  función externa retornó seguiría un enlace de acceso a un marco que ya no
+  existe.
+- **El orden de evaluación no es estrictamente de izquierda a derecha cuando
+  el operando derecho llama a una función que modifica al izquierdo.** Un
+  operando que es una variable se lee en la instrucción que lo usa, después de
+  evaluar lo que está a su derecha. Con `x + f()` y `f` modificando `x`, se
+  suma el valor ya modificado.
+- **Salir de un `try` con `break`, `continue` o `return` no emite `endtry`.**
+  El rango protegido es léxico: `endtry` está al final del bloque.
 - **Las funciones del nivel superior no reciben enlace de acceso.** Su
   registro tiene la ranura, pero queda en `null`: todo lo que ven fuera de sí
   mismas es global y tiene dirección fija.
