@@ -147,6 +147,7 @@ public class IdeFrame extends JFrame {
         bar.add(run);
         bar.add(Box.createHorizontalStrut(14));
         bar.add(fileLabel);
+        bar.add(Box.createHorizontalStrut(14));
         bar.add(Box.createHorizontalGlue());
         bar.add(dbLabel);
         bar.add(Box.createHorizontalStrut(6));
@@ -232,7 +233,11 @@ public class IdeFrame extends JFrame {
     private void openDatabase(Path directory) {
         try {
             db = Database.open(directory);
-            dbLabel.setText("base: " + directory.toAbsolutePath().normalize());
+            // Solo el nombre de la carpeta: la ruta completa empujaba los botones
+            // fuera de la barra. La ruta queda en el tooltip.
+            Path full = directory.toAbsolutePath().normalize();
+            dbLabel.setText("base: " + full.getFileName());
+            dbLabel.setToolTipText(full.toString());
             schema.show(db);
             setStatus("Base abierta: " + directory, IdeTheme.MUTED);
         } catch (StorageException e) {

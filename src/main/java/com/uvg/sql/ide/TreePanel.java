@@ -75,11 +75,17 @@ public class TreePanel extends JPanel {
             return;
         }
         viewer = new TreeViewer(ruleNames, tree) {
-            // TreeViewer cambia los espacios por '·'; las etiquetas del AST
-            // ("Tabla estudiantes AS e") se leen mejor con espacios.
+            // TreeViewer cambia los espacios por '·' dos veces: al medir la
+            // caja (getText) y al dibujar el texto (text). Las etiquetas del
+            // AST ("Tabla estudiantes AS e") se leen mejor con espacios.
             @Override
             protected String getText(Tree node) {
                 return treeTextProvider.getText(node).replace("\n", "\\n");
+            }
+
+            @Override
+            public void text(java.awt.Graphics g, String s, int x, int y) {
+                g.drawString(s.replace("\n", "\\n"), x, y);
             }
         };
         viewer.setBoxColor(IdeTheme.SURFACE);

@@ -47,6 +47,17 @@ public class ErrorsPanel extends JPanel {
             protected Color foregroundFor(JTable source, int row, int column) {
                 return IdeTheme.ERROR;
             }
+
+            // Los mensajes de sintaxis listan todo lo esperado y no caben en la
+            // columna: el tooltip muestra el mensaje completo.
+            @Override
+            public java.awt.Component getTableCellRendererComponent(JTable source, Object value,
+                    boolean selected, boolean focused, int row, int column) {
+                java.awt.Component cell = super.getTableCellRendererComponent(
+                        source, value, selected, focused, row, column);
+                setToolTipText(column == 3 ? String.valueOf(value) : null);
+                return cell;
+            }
         });
         table.addMouseListener(new MouseAdapter() {
             @Override
