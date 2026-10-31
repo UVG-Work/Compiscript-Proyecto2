@@ -1,11 +1,14 @@
 services:
-  compiscript:
+  sql:
     build: .
     volumes:
       - .:/app
       # Cache del repositorio de Maven, para no volver a descargar en cada arranque.
       - maven-repo:/root/.m2
     working_dir: /app
+    # Maven compila en build/ y no en target/: target/ es del editor (ver pom.xml).
+    environment:
+      MAVEN_ARGS: "-Dbuild.dir=/app/build"
     stdin_open: true
     tty: true
 

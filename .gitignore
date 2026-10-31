@@ -1,4 +1,5 @@
 target/
+build/
 .antlr/
 *.class
 
@@ -15,3 +16,6 @@ target/
 # Material del curso: no es entregable del proyecto
 docs/*.pptx
 docs/*.pdf
+
+# Lista de tareas local
+TODO.md

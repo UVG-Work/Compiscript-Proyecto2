@@ -6,17 +6,22 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.uvg</groupId>
-  <artifactId>compiscript</artifactId>
+  <artifactId>sql-interprete</artifactId>
   <version>1.0.0</version>
   <packaging>jar</packaging>
 
-  <name>Compiscript</name>
-  <description>Compilador de Compiscript: analisis semantico y codigo intermedio</description>
+  <name>Interprete SQL</name>
+  <description>Interprete de SQL con almacenamiento propio en archivos de texto</description>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>17</maven.compiler.release>
     <antlr.version>4.13.2</antlr.version>
+    <!-- Donde compila Maven. El contenedor lo cambia a build/ (ver
+         docker-compose.yml) para no pelear con el compilador del editor, que
+         escribe en target/ mientras Maven limpia y empaqueta: esa carrera
+         produce jars con clases rotas ("Unresolved compilation problems"). -->
+    <build.dir>${project.basedir}/target</build.dir>
   </properties>
 
   <dependencies>
@@ -54,7 +59,8 @@
   </dependencies>
 
   <build>
-    <finalName>compiscript</finalName>
+    <directory>${build.dir}</directory>
+    <finalName>sql-interprete</finalName>
 
     <plugins>
       <plugin>
@@ -107,7 +113,7 @@
               </filters>
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>com.uvg.compiscript.Main</mainClass>
+                  <mainClass>com.uvg.sql.Main</mainClass>
                 </transformer>
               </transformers>
             </configuration>

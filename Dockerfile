@@ -1,10 +1,7 @@
 FROM eclipse-temurin:17-jdk-jammy
 
-# graphviz para renderizar a PNG el .dot que emite --dot.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends graphviz \
-    && rm -rf /var/lib/apt/lists/*
-
+# Solo el JDK: Maven lo descarga el wrapper (./mvnw) y sus dependencias quedan
+# en el volumen maven-repo de docker-compose.yml.
 WORKDIR /app
 
 CMD ["sleep", "infinity"]
