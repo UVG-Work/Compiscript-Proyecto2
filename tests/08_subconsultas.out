@@ -1,0 +1,142 @@
+> CreateTable (linea 2)
+Tabla estudiantes creada
+
+> CreateTable (linea 3)
+Tabla cursos creada
+
+> CreateTable (linea 4)
+Tabla inscripciones creada
+
+> Insert (linea 5)
+4 fila(s) insertada(s) en estudiantes
+
+> Insert (linea 6)
+3 fila(s) insertada(s) en cursos
+
+> Insert (linea 7)
+6 fila(s) insertada(s) en inscripciones
+
+> Select (linea 9)
+  plan: estudiantes: recorrido completo (4 registros)
+  plan: subconsulta de la linea 9: no correlacionada, se ejecuta una sola vez
+  plan:   inscripciones: recorrido completo (6 registros)
++--------+
+| nombre |
++--------+
+| Ana    |
+| Bruno  |
+| Carla  |
++--------+
+3 fila(s)
+
+> Select (linea 10)
+  plan: estudiantes: recorrido completo (4 registros)
+  plan: subconsulta de la linea 10: no correlacionada, se ejecuta una sola vez
+  plan:   inscripciones: recorrido completo (6 registros)
++--------+
+| nombre |
++--------+
+| Diego  |
++--------+
+1 fila(s)
+
+> Select (linea 11)
+  plan: e: recorrido completo (4 registros)
+  plan: subconsulta de la linea 12: correlacionada, se ejecuta por cada registro externo
+  plan:   i: recorrido completo (6 registros)
++--------+
+| nombre |
++--------+
+| Ana    |
+| Carla  |
++--------+
+2 fila(s)
+
+> Select (linea 13)
+  plan: c: recorrido completo (3 registros)
+  plan: subconsulta de la linea 14: correlacionada, se ejecuta por cada registro externo
+  plan:   inscripciones: recorrido completo (6 registros)
++--------------+
+| nombre       |
++--------------+
+| Compiladores |
+| Redes        |
++--------------+
+2 fila(s)
+
+> Select (linea 15)
+  plan: estudiantes: recorrido completo (4 registros)
+  plan: subconsulta de la linea 15: no correlacionada, se ejecuta una sola vez
+  plan:   estudiantes: recorrido completo (4 registros)
++--------+------+
+| nombre | edad |
++--------+------+
+| Diego  |   25 |
++--------+------+
+1 fila(s)
+
+> Select (linea 16)
+  plan: e: recorrido completo (4 registros)
+  plan: subconsulta de la linea 16: correlacionada, se ejecuta por cada registro externo
+  plan:   inscripciones: recorrido completo (6 registros)
++--------+--------+
+| nombre | cursos |
++--------+--------+
+| Carla  |      3 |
+| Ana    |      2 |
+| Bruno  |      1 |
+| Diego  |      0 |
++--------+--------+
+4 fila(s)
+
+> Select (linea 19)
+  plan: estudiantes: recorrido completo (4 registros)
+  plan: subconsulta de la linea 19: no correlacionada, se ejecuta una sola vez
+  plan:   estudiantes: recorrido completo (4 registros)
++--------+
+| nombre |
++--------+
+0 fila(s)
+
+> Update (linea 20)
+  plan: estudiantes: recorrido completo (4 registros)
+  plan: subconsulta de la linea 20: no correlacionada, se ejecuta una sola vez
+  plan:   estudiantes: recorrido completo (4 registros)
+1 fila(s) actualizada(s) en estudiantes
+
+> Delete (linea 21)
+  plan: inscripciones: recorrido completo (6 registros)
+  plan: subconsulta de la linea 21: no correlacionada, se ejecuta una sola vez
+  plan:   cursos: recorrido completo (3 registros)
+3 fila(s) eliminada(s) de inscripciones
+
+> Select (linea 22)
+  plan: estudiantes: recorrido completo (4 registros)
++--------+------+
+| nombre | edad |
++--------+------+
+| Ana    |   20 |
+| Bruno  |   25 |
+| Carla  |   18 |
+| Diego  |   25 |
++--------+------+
+4 fila(s)
+
+> Select (linea 23)
+  plan: inscripciones: recorrido completo (3 registros)
++----------+
+| COUNT(*) |
++----------+
+|        3 |
++----------+
+1 fila(s)
+
+> Select (linea 25)
+  plan: estudiantes: recorrido completo (4 registros)
+  plan: subconsulta de la linea 25: no correlacionada, se ejecuta una sola vez
+  plan:   inscripciones: recorrido completo (3 registros)
++--------+
+| nombre |
++--------+
+0 fila(s)
+

@@ -1,0 +1,24 @@
+[SEMANTICO] linea 8:14 la tabla 'alumnos' no existe
+[SEMANTICO] linea 10:7 la columna 'apellido' no existe en estudiantes
+[SEMANTICO] linea 12:42 tipos incompatibles: no se puede comparar INT con VARCHAR en edad = 'veinte'
+[SEMANTICO] linea 13:44 el operador + necesita numeros y recibe VARCHAR y INT
+[SEMANTICO] linea 15:42 tipos incompatibles: la columna 'edad' es INT y el valor 'x' es VARCHAR
+[SEMANTICO] linea 15:66 el texto de 10 caracteres no cabe en la columna 'nombre' VARCHAR(5)
+[SEMANTICO] linea 15:84 '2024-13-01' no es una fecha valida; DATE usa el formato YYYY-MM-DD
+[SEMANTICO] linea 16:12 la columna 'nombre' es NOT NULL y el INSERT no le da valor
+[SEMANTICO] linea 17:32 la fila 1 del INSERT tiene 2 valor(es) y se esperaban 4
+[SEMANTICO] linea 18:32 la columna 'id' es PRIMARY KEY y no admite NULL
+[SEMANTICO] linea 20:7 la columna 'nombre' es ambigua: existe en e y c; califiquela, por ejemplo e.nombre
+[SEMANTICO] linea 21:7 la tabla o alias 'x' no aparece en el FROM
+[SEMANTICO] linea 22:7 la tabla o alias 'estudiantes' no aparece en el FROM
+[SEMANTICO] linea 24:13 el indice 'idx_edad' ya existe (sobre estudiantes.edad)
+[SEMANTICO] linea 25:13 la columna estudiantes.edad ya tiene el indice 'idx_edad'
+[SEMANTICO] linea 26:11 no existe el indice 'idx_nada'
+[SEMANTICO] linea 28:45 la subconsulta escalar debe devolver una sola columna y devuelve 2
+[SEMANTICO] linea 29:44 la subconsulta de IN debe devolver una sola columna y devuelve 2
+[SEMANTICO] linea 31:7 la columna 'nombre' del SELECT debe aparecer en GROUP BY o usarse dentro de una funcion de agregacion
+[SEMANTICO] linea 32:37 no se permite la funcion de agregacion COUNT en WHERE
+[SEMANTICO] linea 33:7 SUM necesita un argumento numerico y 'nombre' es VARCHAR
+[SEMANTICO] linea 35:37 la condicion de WHERE debe ser BOOLEAN y 'edad' es INT
+[SEMANTICO] linea 37:46 ORDER BY por posicion o constante no esta soportado; use el nombre o el alias de la columna
+[SEMANTICO] linea 40:14 la tabla 'inscripciones' no existe

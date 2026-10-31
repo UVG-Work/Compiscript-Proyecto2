@@ -1,0 +1,42 @@
+> CreateTable (linea 2)
+Tabla estudiantes creada
+
+> Insert (linea 4)
+2 fila(s) insertada(s) en estudiantes
+
+> Insert (linea 7)
+1 fila(s) insertada(s) en estudiantes
+
+> Insert (linea 8)
+1 fila(s) insertada(s) en estudiantes
+
+> CreateTable (linea 9)
+Tabla temporal creada
+
+> DropTable (linea 10)
+Tabla temporal eliminada
+
+-- base reabierta desde los archivos
+
+> Select (linea 12)
+  plan: estudiantes: recorrido completo (4 registros)
++----+----------------+------+----------+--------+------------+
+| id | nombre         | edad | promedio | activo | nacimiento |
++----+----------------+------+----------+--------+------------+
+|  1 | Ana            |   20 |     85.0 | TRUE   | 2004-03-15 |
+|  2 | O'Brien, "Bob" |   17 |     72.5 | FALSE  | 2007-11-02 |
+|  3 |                | NULL | NULL     | NULL   | NULL       |
+|  4 | Luis           |   19 | NULL     | NULL   | NULL       |
++----+----------------+------+----------+--------+------------+
+4 fila(s)
+
+> Select (linea 13)
+  plan: estudiantes: recorrido completo (4 registros)
++--------+
+| nombre |
++--------+
+|        |
+| Luis   |
++--------+
+2 fila(s)
+

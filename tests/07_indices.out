@@ -1,0 +1,139 @@
+> CreateTable (linea 3)
+Tabla estudiantes creada
+
+> CreateTable (linea 4)
+Tabla cursos creada
+
+> CreateTable (linea 5)
+Tabla inscripciones creada
+
+> Insert (linea 6)
+4 fila(s) insertada(s) en estudiantes
+
+> Insert (linea 8)
+3 fila(s) insertada(s) en cursos
+
+> Insert (linea 9)
+6 fila(s) insertada(s) en inscripciones
+
+> Select (linea 10)
+  plan: estudiantes: recorrido completo (4 registros)
++--------+
+| nombre |
++--------+
+| Ana    |
+| Carla  |
+| Diego  |
++--------+
+3 fila(s)
+
+> CreateIndex (linea 11)
+Indice idx_edad creado sobre estudiantes(edad)
+
+> CreateIndex (linea 12)
+Indice idx_nacimiento creado sobre estudiantes(nacimiento)
+
+> CreateIndex (linea 13)
+Indice idx_cursos_id creado sobre cursos(id)
+
+> CreateIndex (linea 14)
+Indice idx_insc_est creado sobre inscripciones(estudiante_id)
+
+> Select (linea 15)
+  plan: estudiantes: indice idx_edad (edad >= 18) -> 3 de 4 registros
++--------+
+| nombre |
++--------+
+| Ana    |
+| Carla  |
+| Diego  |
++--------+
+3 fila(s)
+
+> Select (linea 17)
+  plan: estudiantes: indice idx_edad (20 > edad) -> 2 de 4 registros
++--------+
+| nombre |
++--------+
+| Bruno  |
+| Carla  |
++--------+
+2 fila(s)
+
+> Select (linea 18)
+  plan: estudiantes: indice idx_edad (edad IN (17, 25)) -> 2 de 4 registros
++--------+
+| nombre |
++--------+
+| Bruno  |
++--------+
+1 fila(s)
+
+> Select (linea 19)
+  plan: estudiantes: indice idx_nacimiento (nacimiento < '2006-06-01') -> 2 de 4 registros
++--------+
+| nombre |
++--------+
+| Ana    |
+| Carla  |
++--------+
+2 fila(s)
+
+> Select (linea 21)
+  plan: e: indice idx_edad (e.edad = 18) -> 1 de 4 registros
+  plan: i: indice idx_insc_est (e.id = i.estudiante_id), una busqueda por cada registro externo
+  plan: c: indice idx_cursos_id (c.id = i.curso_id), una busqueda por cada registro externo
++--------+----------------+
+| nombre | nombre         |
++--------+----------------+
+| Carla  | Compiladores   |
+| Carla  | Bases de datos |
+| Carla  | Redes          |
++--------+----------------+
+3 fila(s)
+
+> Insert (linea 24)
+1 fila(s) insertada(s) en estudiantes
+
+> Update (linea 25)
+  plan: estudiantes: indice idx_edad (edad = 25) -> 1 de 5 registros
+1 fila(s) actualizada(s) en estudiantes
+
+> Delete (linea 26)
+  plan: estudiantes: indice idx_edad (edad < 18) -> 1 de 5 registros
+1 fila(s) eliminada(s) de estudiantes
+
+-- base reabierta desde los archivos
+
+> Select (linea 28)
+  plan: estudiantes: indice idx_edad (edad = 18) -> 2 de 4 registros
++--------+------+
+| nombre | edad |
++--------+------+
+| Carla  |   18 |
+| Eva    |   18 |
++--------+------+
+2 fila(s)
+
+> Select (linea 29)
+  plan: estudiantes: indice idx_edad (edad > 25) -> 1 de 4 registros
++--------+------+
+| nombre | edad |
++--------+------+
+| Diego  |   30 |
++--------+------+
+1 fila(s)
+
+> DropIndex (linea 30)
+Indice idx_edad eliminado
+
+> Select (linea 31)
+  plan: estudiantes: recorrido completo (4 registros)
++--------+------+
+| nombre | edad |
++--------+------+
+| Carla  |   18 |
+| Eva    |   18 |
++--------+------+
+2 fila(s)
+

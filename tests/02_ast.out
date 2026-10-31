@@ -1,0 +1,76 @@
+Script
+├─ CreateTable estudiantes
+│  ├─ Columna id INT PRIMARY KEY
+│  └─ Columna nombre VARCHAR(20) NOT NULL
+├─ CreateTable cursos
+│  ├─ Columna id INT
+│  └─ Columna cupo INT
+├─ CreateTable inscripciones
+│  ├─ Columna estudiante_id INT
+│  └─ Columna curso_id INT
+└─ Select
+   ├─ Proyeccion
+   │  ├─ Columna e.nombre
+   │  └─ AS total
+   │     └─ COUNT(*)
+   ├─ From
+   │  └─ Tabla estudiantes AS e
+   ├─ InnerJoin
+   │  ├─ Tabla inscripciones AS i
+   │  └─ On
+   │     └─ =
+   │        ├─ Columna e.id
+   │        └─ Columna i.estudiante_id
+   ├─ Where
+   │  └─ AND
+   │     ├─ IN
+   │     │  ├─ Columna e.id
+   │     │  └─ Select
+   │     │     ├─ Proyeccion
+   │     │     │  └─ Columna estudiante_id
+   │     │     ├─ From
+   │     │     │  └─ Tabla inscripciones
+   │     │     └─ Where
+   │     │        └─ =
+   │     │           ├─ Columna curso_id
+   │     │           └─ 3
+   │     └─ NOT EXISTS
+   │        └─ Select
+   │           ├─ Proyeccion
+   │           │  └─ *
+   │           ├─ From
+   │           │  └─ Tabla cursos AS c
+   │           └─ Where
+   │              └─ AND
+   │                 ├─ =
+   │                 │  ├─ Columna c.id
+   │                 │  └─ Columna i.curso_id
+   │                 └─ >
+   │                    ├─ Columna c.cupo
+   │                    └─ -1
+   ├─ GroupBy
+   │  └─ Columna e.nombre
+   ├─ Having
+   │  └─ >
+   │     ├─ COUNT(*)
+   │     └─ 1
+   └─ OrderBy
+      └─ DESC
+         └─ Columna total
+
+> CreateTable (linea 4)
+Tabla estudiantes creada
+
+> CreateTable (linea 5)
+Tabla cursos creada
+
+> CreateTable (linea 6)
+Tabla inscripciones creada
+
+> Select (linea 7)
+  plan: e: recorrido completo (0 registros)
++--------+-------+
+| nombre | total |
++--------+-------+
+0 fila(s)
+

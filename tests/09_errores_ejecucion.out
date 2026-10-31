@@ -1,0 +1,42 @@
+> CreateTable (linea 3)
+Tabla t creada
+
+> Insert (linea 4)
+2 fila(s) insertada(s) en t
+
+[EJECUCION] linea 6:0 llave primaria duplicada: id = 1 ya existe en t
+
+-- base reabierta desde los archivos
+
+> Select (linea 8)
+  plan: t: recorrido completo (2 registros)
++----+--------+----+
+| id | nombre | n  |
++----+--------+----+
+|  1 | a      | 10 |
+|  2 | b      |  0 |
++----+--------+----+
+2 fila(s)
+
+[EJECUCION] linea 10:31 la subconsulta escalar devolvio 2 registros; debe devolver a lo mas uno
+
+-- base reabierta desde los archivos
+
+[EJECUCION] linea 12:0 llave primaria duplicada: id = 1 ya existe en t
+
+-- base reabierta desde los archivos
+
+[EJECUCION] linea 14:9 division entre cero
+
+-- base reabierta desde los archivos
+
+> Select (linea 16)
+  plan: t: recorrido completo (2 registros)
++----+--------+----+
+| id | nombre | n  |
++----+--------+----+
+|  1 | a      | 10 |
+|  2 | b      |  0 |
++----+--------+----+
+2 fila(s)
+

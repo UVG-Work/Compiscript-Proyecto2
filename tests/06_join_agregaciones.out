@@ -1,0 +1,83 @@
+> CreateTable (linea 2)
+Tabla estudiantes creada
+
+> CreateTable (linea 3)
+Tabla cursos creada
+
+> CreateTable (linea 4)
+Tabla inscripciones creada
+
+> Insert (linea 5)
+4 fila(s) insertada(s) en estudiantes
+
+> Insert (linea 6)
+3 fila(s) insertada(s) en cursos
+
+> Insert (linea 7)
+6 fila(s) insertada(s) en inscripciones
+
+> Select (linea 8)
+  plan: e: recorrido completo (4 registros)
+  plan: i: recorrido completo (6 registros)
+  plan: c: recorrido completo (3 registros)
++--------+----------------+------+
+| nombre | curso          | nota |
++--------+----------------+------+
+| Ana    | Compiladores   | 90.0 |
+| Carla  | Bases de datos | NULL |
+| Carla  | Compiladores   | 85.0 |
++--------+----------------+------+
+3 fila(s)
+
+> Select (linea 12)
+  plan: c: recorrido completo (3 registros)
+  plan: i: recorrido completo (6 registros)
++--------------+-----------+----------+----------+-------------+-------------+-----------------+
+| nombre       | inscritos | con_nota | promedio | MIN(i.nota) | MAX(i.nota) | SUM(c.creditos) |
++--------------+-----------+----------+----------+-------------+-------------+-----------------+
+| Redes        |         3 |        3 |     68.5 |        60.0 |        75.5 |               9 |
+| Compiladores |         2 |        2 |     87.5 |        85.0 |        90.0 |              10 |
++--------------+-----------+----------+----------+-------------+-------------+-----------------+
+2 fila(s)
+
+> Select (linea 16)
+  plan: estudiantes: recorrido completo (4 registros)
++----------+-----------+-----------+-------------+-------------+
+| COUNT(*) | SUM(edad) | AVG(edad) | MIN(nombre) | MAX(nombre) |
++----------+-----------+-----------+-------------+-------------+
+|        4 |        80 |      20.0 | Ana         | Diego       |
++----------+-----------+-----------+-------------+-------------+
+1 fila(s)
+
+> Select (linea 18)
+  plan: estudiantes: recorrido completo (4 registros)
++----------+-----------+
+| COUNT(*) | SUM(edad) |
++----------+-----------+
+|        0 | NULL      |
++----------+-----------+
+1 fila(s)
+
+> Select (linea 19)
+  plan: estudiantes: recorrido completo (4 registros)
++--------+----------+
+| decada | COUNT(*) |
++--------+----------+
+|      1 |        2 |
+|      2 |        2 |
++--------+----------+
+2 fila(s)
+
+> Select (linea 20)
+  plan: e: recorrido completo (4 registros)
+  plan: i: recorrido completo (6 registros)
+  plan: c: recorrido completo (3 registros)
++--------+----------+
+| nombre | creditos |
++--------+----------+
+| Carla  |       12 |
+| Ana    |        8 |
+| Bruno  |        3 |
++--------+----------+
+3 fila(s)
+

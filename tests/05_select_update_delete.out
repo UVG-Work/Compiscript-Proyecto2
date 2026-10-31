@@ -1,0 +1,100 @@
+> CreateTable (linea 2)
+Tabla estudiantes creada
+
+> Insert (linea 3)
+5 fila(s) insertada(s) en estudiantes
+
+> Select (linea 6)
+  plan: estudiantes: recorrido completo (5 registros)
++--------+
+| nombre |
++--------+
+| Ana    |
+| Carla  |
+| Elena  |
++--------+
+3 fila(s)
+
+> Select (linea 8)
+  plan: estudiantes: recorrido completo (5 registros)
++--------+------+-------+
+| nombre | edad | doble |
++--------+------+-------+
+| Ana    |   20 | 171.0 |
+| Carla  |   18 | NULL  |
++--------+------+-------+
+2 fila(s)
+
+> Select (linea 11)
+  plan: estudiantes: recorrido completo (5 registros)
++----+--------+------+----------+
+| id | nombre | edad | promedio |
++----+--------+------+----------+
+|  5 | Elena  |   22 |     60.0 |
+|  2 | Bruno  |   17 |     72.0 |
+|  1 | Ana    |   20 |     85.5 |
+|  4 | Diego  | NULL |     90.0 |
+|  3 | Carla  |   18 | NULL     |
++----+--------+------+----------+
+5 fila(s)
+
+> Select (linea 12)
+  plan: estudiantes: recorrido completo (5 registros)
++--------+
+| nombre |
++--------+
+| Bruno  |
+| Carla  |
+| Elena  |
++--------+
+3 fila(s)
+
+> Select (linea 13)
+  plan: estudiantes: recorrido completo (5 registros)
++--------+----------+----------+-----------+
+| nombre | edad / 2 | edad % 2 | -promedio |
++--------+----------+----------+-----------+
+| Bruno  |        8 |        1 |     -72.0 |
+| Ana    |       10 |        0 |     -85.5 |
++--------+----------+----------+-----------+
+2 fila(s)
+
+> Update (linea 15)
+  plan: estudiantes: recorrido completo (5 registros)
+1 fila(s) actualizada(s) en estudiantes
+
+> Update (linea 16)
+  plan: estudiantes: recorrido completo (5 registros)
+1 fila(s) actualizada(s) en estudiantes
+
+> Delete (linea 17)
+  plan: estudiantes: recorrido completo (5 registros)
+1 fila(s) eliminada(s) de estudiantes
+
+-- base reabierta desde los archivos
+
+> Select (linea 19)
+  plan: estudiantes: recorrido completo (4 registros)
++----+--------+------+----------+
+| id | nombre | edad | promedio |
++----+--------+------+----------+
+|  1 | Ana    |   20 |     85.5 |
+|  2 | Bruno  |   18 |     75.0 |
+|  3 | Carla  |   18 | NULL     |
+| 22 | Elena  |    5 |     60.0 |
++----+--------+------+----------+
+4 fila(s)
+
+> Delete (linea 20)
+  plan: estudiantes: recorrido completo (4 registros)
+4 fila(s) eliminada(s) de estudiantes
+
+> Select (linea 21)
+  plan: estudiantes: recorrido completo (0 registros)
++----------+
+| COUNT(*) |
++----------+
+|        0 |
++----------+
+1 fila(s)
+

@@ -1,0 +1,5 @@
+[LEXICO] linea 3:48 caracter no reconocido: '#'
+[SINTACTICO] linea 3:50 entrada sobrante '2' se esperaba {fin de archivo, ';'}
+[SINTACTICO] linea 4:13 falta IDENT en ';'
+[LEXICO] linea 5:25 cadena de texto sin cerrar: falta la comilla ' final
+[SINTACTICO] linea 6:0 entrada inesperada 'fin de archivo' se esperaba {'NOT', 'EXISTS', 'NULL', 'TRUE', 'FALSE', 'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'DATE', '(', '+', '-', FLOAT_LIT, INTEGER_LIT, STRING, IDENT}
