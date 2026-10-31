@@ -228,6 +228,67 @@ errores de ejecución. Dentro de un script, la línea `-- @reabrir` cierra la
 base y la vuelve a abrir desde los archivos, para probar que lo guardado se lee
 igual, y `-- @ast` agrega el AST a la salida.
 
+## Pruebas con la aplicación
+
+Además de la batería automática se probó el IDE con los scripts de `examples/`,
+en este orden y sobre una misma base que empieza vacía (la de errores semánticos
+usa una base vacía aparte). Las capturas están en
+[`docs/capturas/`](docs/capturas).
+
+| # | Prueba | Resultado |
+|---|--------|-----------|
+| 1 | Ejecutar `universidad.sql` (F6) | Se ejecutan las 12 sentencias. La pestaña de resultados abre el último SELECT y su plan |
+| 2 | Volver a analizar `universidad.sql` sobre la misma base | 5 errores "ya existe": el análisis se hace contra la base abierta. El Esquema muestra las 3 tablas, sus registros e índices |
+| 3 | Pestaña Tokens | Tipo, lexema, línea y columna de cada token |
+| 4 | Árbol sintáctico de `consultas.sql` | El árbol de parseo completo (198 nodos), con las reglas de la gramática |
+| 5 | AST de `consultas.sql` | El mismo script en 53 nodos: sin puntuación, con alias y operadores ya resueltos |
+| 6 | Ejecutar `consultas.sql` | El JOIN de tres tablas usa `idx_edad` y `idx_insc_estudiante`; la tabla sin índice se recorre completa |
+| 7 | Analizar `errores_sintaxis.sql` | Errores léxicos (`@`, cadena sin cerrar) y sintácticos con línea y columna; no se ejecuta nada |
+| 8 | Analizar `tests/03_semantico.sql` | Los 24 errores semánticos de la lista del enunciado, cada uno en su línea |
+| 9 | Ejecutar `error_ejecucion.sql` | El primer INSERT se guarda. El segundo falla por llave primaria duplicada y no inserta ninguna de sus dos filas; el SELECT ya no corre |
+
+**Ejecución (1) y JOIN con índices (6)**
+
+![Resultados](docs/capturas/01_resultados.png)
+![JOIN con índices](docs/capturas/06_join_con_indices.png)
+
+**Esquema (2), tokens (3), árbol sintáctico (4) y AST (5)**
+
+![Esquema](docs/capturas/02_esquema_y_tabla_ya_existe.png)
+![Tokens](docs/capturas/03_tokens.png)
+![Árbol sintáctico](docs/capturas/04_arbol_sintactico.png)
+![AST](docs/capturas/05_ast.png)
+
+**Errores léxicos y sintácticos (7), semánticos (8) y de ejecución (9)**
+
+![Errores léxicos y sintácticos](docs/capturas/07_errores_lexicos_sintacticos.png)
+![Errores semánticos](docs/capturas/08_errores_semanticos.png)
+![Error de ejecución](docs/capturas/09_error_de_ejecucion.png)
+
+### Hallazgos
+
+Corregidos durante las pruebas:
+
+- El árbol sintáctico y el AST mostraban `·` en lugar de espacios
+  ("Tabla·estudiantes·AS·e"): `TreeViewer` de ANTLR los reemplaza al medir y
+  al dibujar cada nodo. Ahora se ven los espacios normales.
+- En la barra superior, el nombre del script y la ruta de la base se pegaban
+  ("consultas.sqlbase: /private/...") y la ruta larga empujaba los botones. Ahora
+  se muestra solo el nombre de la carpeta, y la ruta completa en el tooltip.
+- Los mensajes de error de sintaxis, que listan todo lo que se esperaba, no
+  cabían en la tabla. Ahora el mensaje completo aparece al pasar el mouse.
+
+Comportamientos observados que son correctos, pero conviene saber:
+
+- Al abrir un script, el IDE lo analiza contra la base abierta. Un script de
+  creación ya ejecutado reporta "la tabla ya existe" (prueba 2), y el mismo
+  `03_semantico.sql` da 28 errores sobre una base con esas tablas en vez de 24.
+- Un error de ejecución detiene el script, pero lo ejecutado antes queda
+  guardado (prueba 9): cada sentencia es atómica, el script completo no.
+- Con `ORDER BY ... DESC` los NULL salen primero (prueba 6), y con `ASC` al final.
+- El panel de errores muestra unas tres filas a la vez; con muchos errores hay
+  que desplazarse o agrandarlo arrastrando el divisor.
+
 ## Limitaciones conocidas
 
 - Una tabla se carga completa a memoria la primera vez que se usa en la sesión,
