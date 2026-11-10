@@ -11,7 +11,7 @@
   <packaging>jar</packaging>
 
   <name>Compiscript</name>
-  <description>Compilador de Compiscript: analisis semantico y codigo intermedio</description>
+  <description>Compilador de Compiscript: analisis semantico, codigo intermedio y MIPS</description>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

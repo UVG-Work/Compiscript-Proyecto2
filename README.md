@@ -1,12 +1,15 @@
-# Compiscript — Análisis semántico y código intermedio
+# Compiscript — Compilador a MIPS
 
 Proyecto de Construcción de Compiladores (UVG). Compilador de Compiscript, un
 subconjunto de TypeScript, construido sobre ANTLR 4 y Java 17: análisis
-semántico y generación de código de tres direcciones (TAC).
+semántico, código de tres direcciones (TAC) y generación de ensamblador MIPS
+que se ejecuta en el simulador MARS.
 
 - Lenguaje fuente: [`docs/Especificaciones.md`](docs/Especificaciones.md)
 - Lenguaje intermedio, con ejemplos de traducción y supuestos:
   [`docs/CodigoIntermedio.md`](docs/CodigoIntermedio.md)
+- Generación de MIPS: secuencia de llamada, `getReg()` y runtime:
+  [`docs/Mips.md`](docs/Mips.md)
 - Arquitectura y decisiones de diseño: [`docs/Arquitectura.md`](docs/Arquitectura.md)
 
 ## Requisitos
@@ -14,6 +17,8 @@ semántico y generación de código de tres direcciones (TAC).
 - JDK 17 o superior
 - Maven (o usar el wrapper `./mvnw` incluido, que lo descarga solo)
 - Graphviz, opcional: sin él `--dot` deja el `.dot` pero no genera el `.png`
+- El simulador MARS 4.5 viene incluido en [`lib/Mars4_5.jar`](lib) (licencia
+  MIT). Para usar otra copia: `-Dmars.jar=ruta` o la variable `MARS_JAR`.
 
 ## Compilar
 
@@ -49,6 +54,8 @@ java -jar target/compiscript.jar examples/ok_basico.cps
 | `--dot` | exporta el árbol a `.dot` y, si hay Graphviz, a `.png` |
 | `--quiet` | no imprime la tabla de símbolos ni los registros de activación |
 | `--tac` | imprime solo el código intermedio (los errores van a stderr) |
+| `--mips` | imprime solo el ensamblador MIPS (los errores van a stderr) |
+| `--run` | genera el MIPS, lo ejecuta en MARS e imprime lo que imprime el programa |
 | `--test <dir>` | corre la batería de pruebas y las matrices de cobertura |
 | `--ide [archivo]` | abre el IDE gráfico |
 
@@ -85,7 +92,34 @@ L1:
 endfunc
 ```
 
-Con errores no se genera código intermedio. Los diagnósticos van con línea,
+Para ejecutar un programa en el simulador:
+
+```
+$ java -jar target/compiscript.jar tests/mips/ok_06_closures.cps --run
+25
+49
+230
+10
+```
+
+`--mips` deja el ensamblador listo para abrirlo en MARS:
+
+```bash
+java -jar target/compiscript.jar tests/mips/ok_05_funciones.cps --mips > funciones.asm
+java -jar lib/Mars4_5.jar funciones.asm       # o abrirlo en la interfaz de MARS
+```
+
+Un error en tiempo de ejecución (división entre cero, índice fuera de rango,
+acceso a `null`) salta al `catch` que lo rodea; sin `catch`, el programa
+imprime el error y `--run` termina con código 1:
+
+```
+$ java -jar target/compiscript.jar tests/mips/err_01_division.cps --run
+antes
+Error en tiempo de ejecucion: division entre cero
+```
+
+Con errores no se genera código intermedio ni MIPS. Los diagnósticos van con línea,
 columna, categoría y severidad:
 
 ```
@@ -107,13 +141,15 @@ Editor con resaltado y números de línea a la izquierda; a la derecha las pesta
 **Árbol sintáctico** (diagrama de nodos y aristas, con zoom y exportación a
 DOT/PNG), **Tabla de símbolos** (árbol de entornos y, al seleccionar uno, sus
 símbolos con todos los atributos, incluida su dirección), **Tokens**, **Código
-intermedio** y **Registros de activación**. Abajo, la tabla de **Errores**
-—sintaxis y semántica juntas, con severidad, categoría y ubicación— y la
-**Salida**. Con errores, las dos pestañas del código intermedio quedan vacías.
+intermedio**, **Registros de activación** y **MIPS**. Abajo, la tabla de
+**Errores** —sintaxis y semántica juntas, con severidad, categoría y
+ubicación— y la **Salida**, donde aparece también lo que imprime el programa al
+ejecutarlo en MARS. Con errores, las pestañas de código quedan vacías.
 
 | Atajo | Acción |
 |---|---|
 | `F5` | Compilar |
+| `F7` | Compilar y ejecutar el MIPS en MARS |
 | `F6` | Ejecutar la batería de pruebas |
 | doble clic en un error | salta a esa línea del editor |
 
@@ -159,9 +195,29 @@ java -jar target/compiscript.jar tests/tac/ok_05_clases.cps --tac > tests/tac/ok
 
 y revisarlo a mano contra el fuente antes de commitearlo.
 
-Al final imprime dos **matrices de cobertura**: las 30 reglas semánticas y las
-24 construcciones que se traducen a TAC. **Una regla o construcción sin cubrir
-hace fallar la batería** igual que una prueba en rojo:
+Los casos de MIPS viven en [`tests/mips/`](tests/mips). Cada uno se compila,
+**se ejecuta en MARS** y su salida se compara línea por línea con el `.out` de
+al lado:
+
+```
+// @esperado: MIPS
+// @mips: M07, M08, M09
+```
+
+Los `err_` de esa carpeta declaran `@esperado: MIPS-ERROR`: deben terminar con
+un error en tiempo de ejecución y su `.out` incluye el mensaje. Para regenerar
+un `.out`:
+
+```bash
+java -jar target/compiscript.jar tests/mips/ok_05_funciones.cps --run > tests/mips/ok_05_funciones.out
+```
+
+y revisarlo a mano contra el fuente antes de commitearlo.
+
+Al final imprime tres **matrices de cobertura**: las 30 reglas semánticas, las
+24 construcciones que se traducen a TAC y las 20 de la generación de MIPS.
+**Una regla o construcción sin cubrir hace fallar la batería** igual que una
+prueba en rojo:
 
 ```
 Cobertura de las 30 reglas semanticas:
@@ -171,6 +227,12 @@ Cobertura de la generacion de codigo intermedio (24 construcciones):
   I01 [tac]  aritmetica (+,-,*,/,%) con precedencia y asociatividad
   ...
   casos fallidos: 17 programa(s) con errores, ninguno genero codigo intermedio
+  todas las construcciones tienen su caso
+
+Cobertura de la generacion de MIPS (20 construcciones, ejecutadas en MARS):
+  M01 [run]  aritmetica entera, division y modulo
+  ...
+  casos fallidos: 17 programa(s) con errores sin ensamblador, 3 con error en tiempo de ejecucion
   todas las construcciones tienen su caso
 ```
 
@@ -182,6 +244,7 @@ docker compose exec compiscript ./mvnw clean verify
 docker compose exec compiscript java -jar target/compiscript.jar --test tests
 docker compose exec compiscript java -jar target/compiscript.jar examples/ok_basico.cps --dot
 docker compose exec compiscript java -jar target/compiscript.jar tests/tac/ok_06_herencia.cps --tac
+docker compose exec compiscript java -jar target/compiscript.jar tests/mips/ok_07_clases.cps --run
 ```
 
 La imagen trae Graphviz, así que ahí `--dot` sí produce el `.png`.
@@ -198,12 +261,15 @@ src/main/java/com/uvg/compiscript/
   symbols/                  tabla de símbolos, ámbitos y distribución de memoria
   semantic/                 analizador: SemanticVisitor, TypeRules, anotaciones del árbol
   codegen/                  generador de TAC, temporales y registros de activación
+  mips/                     generador de MIPS, getReg, runtime y ejecución en MARS
   compiler/                 CompilerService: todas las fases en un solo lugar
   ide/                      IDE Swing
   tools/                    exportador DOT, arnés de pruebas y catálogos de cobertura
 examples/                   programas .cps de ejemplo
 tests/                      batería semántica
 tests/tac/                  batería de código intermedio (.cps y su .tac esperado)
+tests/mips/                 batería de MIPS (.cps y la salida .out esperada en MARS)
+lib/Mars4_5.jar             simulador MARS 4.5
 ```
 
 Los archivos que ANTLR genera (`CompiscriptLexer.java`, `CompiscriptParser.java`,
@@ -212,5 +278,5 @@ se versionan: los regenera `mvnw package` a partir de la gramática.
 
 ## Nota sobre Docker
 
-El CLI y la batería corren dentro del contenedor. El **IDE no**: la imagen no
-trae servidor gráfico, así que se demuestra en el anfitrión.
+El CLI, la batería y MARS corren dentro del contenedor. El **IDE no**: la
+imagen no trae servidor gráfico, así que se demuestra en el anfitrión.

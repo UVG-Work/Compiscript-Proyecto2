@@ -375,6 +375,70 @@ Además, `TestRunner` verifica en **todos** los casos con errores que no se haya
 producido TAC, y la matriz de las 24 construcciones (`RuleCatalog.GENERATION`)
 hace fallar la batería si alguna queda sin caso.
 
+## Generación de MIPS
+
+El detalle de la traducción, la secuencia de llamada y `getReg()` está en
+[`Mips.md`](Mips.md). Aquí va el porqué.
+
+### El generador de MIPS lee el TAC, no el árbol
+
+Paquete [`mips/`](../src/main/java/com/uvg/compiscript/mips). Traduce el texto
+que imprime `--tac`, así que el código intermedio es de verdad la frontera
+entre las dos mitades del compilador: lo que se ve en la pestaña **Código
+intermedio** es lo que se traduce. Lo único que se agrega es un tipo por
+instrucción, que no se imprime, en las pocas instrucciones cuyo código de
+máquina depende de él (`+` entero o de punto flotante, `==` sobre `string`,
+`print`, acceso a una lista). Volver a inferir tipos desde el TAC habría sido
+repetir el análisis semántico con menos información.
+
+### El modelo de memoria del TAC se conserva
+
+Los desplazamientos de la fase anterior se usan tal cual: `fp[n]` es `n($fp)`
+y el campo `+8` de un objeto es `8(base)`. El único cambio fue `boolean` de 1 a
+4 bytes, porque con 1 la variable siguiente quedaba desalineada y `lw` exige
+múltiplos de 4. Cambió el TAC de dos casos (`ok_01_expresiones` y
+`ok_10_bordes`): solo direcciones.
+
+Todo valor es una palabra en un registro entero, incluidos los `float`, que
+solo pasan a la FPU para operar. Así `getReg` maneja un solo tipo de registro,
+y copiar, pasar o guardar un `float` es lo mismo que un entero.
+
+### El prólogo copia los argumentos
+
+Los argumentos llegan en `$a0-$a3` y por la pila, y es la función llamada la
+que los copia a sus desplazamientos del registro de activación. La alternativa,
+que quien llama los escriba directo en el marco nuevo, exige conocer el tamaño
+de ese marco, y en una llamada por la tabla de métodos o por un valor función
+el destino no se conoce hasta ejecutar.
+
+### Asignación local, vida global
+
+Los registros se asignan dentro de cada bloque básico; al entrar a uno se
+olvidan. Es el `getReg()` del libro de texto, correcto para cualquier flujo de
+control sin coordinar registros entre caminos. La vida de los temporales sí se
+calcula sobre toda la función: es lo que permite soltar un registro en la
+última lectura y no escribir a memoria un temporal que ya nadie va a leer.
+
+Antes de una llamada se escriben a memoria los registros sucios y después se
+olvidan todos, aunque los `$s` se preserven: la función llamada puede cambiar
+un global o, por el enlace de acceso, una local de quien llama, y esa copia en
+registro quedaría vieja.
+
+### MARS como proceso aparte
+
+`MarsRunner` corre `java -jar lib/Mars4_5.jar` en otro proceso en vez de usar
+MARS como biblioteca. MARS guarda su estado en campos estáticos y termina con
+`System.exit`: dentro del mismo proceso, una ejecución contaminaría la
+siguiente y cerraría el IDE. Como proceso aparte además tiene tope de pasos y
+de tiempo, y un ciclo infinito no cuelga la batería.
+
+### Los errores en ejecución se revisan en MIPS
+
+El TAC no tiene instrucciones de verificación; el código MIPS de cada división
+entera y de cada acceso indexado revisa divisor cero, `null` y rango. Así
+`try/catch` tiene algo que atrapar: `rt_throw` restaura `$sp` y `$fp` del `try`
+y salta al `catch`, aunque el error haya ocurrido varias llamadas más abajo.
+
 ## El IDE
 
 Paquete [`ide/`](../src/main/java/com/uvg/compiscript/ide), Swing. Se abre con
@@ -383,19 +447,20 @@ artefacto y ningún comando extra que memorizar.
 
 | Clase | Rol |
 |---|---|
-| `IdeFrame` | Editor a la izquierda; pestañas Árbol / Tabla de símbolos / Tokens a la derecha; Errores y Salida abajo. `F5` compila, `F6` corre la batería |
+| `IdeFrame` | Editor a la izquierda; pestañas Árbol / Tabla de símbolos / Tokens / Código intermedio / Registros de activación / MIPS a la derecha; Errores y Salida abajo. `F5` compila, `F7` ejecuta en MARS, `F6` corre la batería |
 | `EditorPanel` | `RSyntaxTextArea` con números de línea. Pinta de rojo las líneas con error y de ámbar las que tienen advertencia |
 | `TreePanel` | `org.antlr.v4.gui.TreeViewer` con zoom, más exportación a DOT/PNG reutilizando `tools/TreeExporter` |
 | `SymbolTablePanel` | `JTree` de ámbitos; al seleccionar uno, una tabla con **todos** los atributos de sus símbolos. Es la salida "estado de la tabla de símbolos por cada entorno" |
 | `DiagnosticsPanel` | Tabla Severidad / Categoría / Línea / Columna / Mensaje. Doble clic salta a la línea |
 | `TokensPanel` | El flujo de tokens del lexer |
-| `TacPanel` | El código intermedio y, en otra pestaña, el área estática, los registros de activación y la forma de cada objeto |
+| `TacPanel` | El código intermedio; en otra pestaña, el área estática, los registros de activación y la forma de cada objeto; en otra, el MIPS |
 
 **`compiler/CompilerService` es la pieza clave.** Antes, `Main.analyze` imprimía a
 `System.out` y no devolvía nada reutilizable; el IDE habría tenido que duplicar el
 cableado lexer→parser→listener→analizador, como ya lo duplicaba `TestRunner`. Ahora
 los tres consumen el mismo servicio, que devuelve un `CompilationResult` con árbol,
-tokens, ámbito global, diagnósticos y el código intermedio (null si hubo errores).
+tokens, ámbito global, diagnósticos, el código intermedio y el MIPS (null si hubo
+errores).
 
 Los errores de sintaxis se convierten a `SemanticError` con categoría `SINTAXIS` y
 viajan **en la misma lista** que los semánticos: el enunciado pide reportarlos "con

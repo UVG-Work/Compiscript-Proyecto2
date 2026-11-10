@@ -16,12 +16,12 @@ java -jar target/compiscript.jar tests/tac/ok_03_funciones.cps --tac
 
 ## Cuándo se genera
 
-El código intermedio es la última fase y solo corre si el programa no tiene
-errores de sintaxis ni semánticos. Con cualquier error se muestran los errores
-y no se produce TAC.
+El código intermedio se genera solo si el programa no tiene errores de
+sintaxis ni semánticos. Con cualquier error se muestran los errores y no se
+produce TAC. Después el TAC se traduce a MIPS ([`Mips.md`](Mips.md)).
 
 ```
-fuente .cps → lexer/parser → análisis semántico → distribución de memoria → TAC
+fuente .cps → lexer/parser → análisis semántico → distribución de memoria → TAC → MIPS
 ```
 
 El generador no vuelve a resolver nombres ni a inferir tipos. Durante el
@@ -116,11 +116,13 @@ escriben memoria indirecta son `x = t[i]` y `t[i] = y`.
 |---|---|
 | `integer` | 4 |
 | `float` | 8 |
-| `boolean` | 1 |
+| `boolean` | 4 |
 | `string` | 8 (referencia) |
 | clases, listas y funciones | 8 (referencia) |
 
-No hay alineación: cada variable empieza donde termina la anterior.
+Cada variable empieza donde termina la anterior. Como todo tamaño es 4 u 8,
+toda dirección queda alineada a palabra, que es lo que MIPS exige para `lw` y
+`sw` (ver [`Mips.md`](Mips.md)).
 
 ### Área estática
 
@@ -304,7 +306,7 @@ L3:
 L1:
     t1 = false
 L2:
-    G[25] = t1
+    G[28] = t1
 ```
 
 `!` tampoco genera código en una condición: invierte el sentido del salto.
@@ -774,9 +776,9 @@ L2:
 
 ## Supuestos
 
-- **No hay comprobaciones en tiempo de ejecución.** Un índice fuera de rango,
-  la división entre cero o un acceso a `null` no generan código de
-  verificación. Lo que valida el compilador lo valida el análisis semántico.
+- **El TAC no tiene instrucciones de verificación.** Un índice fuera de rango,
+  la división entre cero o un acceso a `null` los revisa el código MIPS que
+  traduce el acceso o la división, y ahí es donde un error salta al `catch`.
 - **Una función no puede escapar del registro de activación que la contiene.**
   La gramática no tiene tipos función, así que no se puede declarar un
   parámetro ni un retorno de ese tipo. Por eso los registros de activación
@@ -791,8 +793,8 @@ L2:
   operando que es una variable se lee en la instrucción que lo usa, después de
   evaluar lo que está a su derecha. Con `x + f()` y `f` modificando `x`, se
   suma el valor ya modificado.
-- **Salir de un `try` con `break`, `continue` o `return` no emite `endtry`.**
-  El rango protegido es léxico: `endtry` está al final del bloque.
+- **Salir de un `try` con `break`, `continue` o `return` cierra el `try`:**
+  antes del salto se emite un `endtry` por cada `try` que se abandona.
 - **Las funciones del nivel superior no reciben enlace de acceso.** Su
   registro tiene la ranura, pero queda en `null`: todo lo que ven fuera de sí
   mismas es global y tiene dirección fija.
