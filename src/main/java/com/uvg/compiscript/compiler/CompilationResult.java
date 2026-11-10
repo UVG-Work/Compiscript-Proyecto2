@@ -13,8 +13,8 @@ import org.antlr.v4.runtime.tree.ParseTree;
  * Todo lo que produce una compilacion, para que el CLI y el IDE consuman lo
  * mismo.
  *
- * <p>{@code tac} es null si hubo cualquier error: el codigo intermedio solo se
- * genera para programas validos.
+ * <p>{@code tac} y {@code mips} son null si hubo cualquier error: el codigo
+ * intermedio y el ensamblador solo se generan para programas validos.
  *
  * <p>Los errores de sintaxis y los semanticos llegan en una sola lista
  * ({@code diagnostics}): el enunciado pide reportarlos "con su tipo y ubicacion"
@@ -27,6 +27,7 @@ public record CompilationResult(String origin,
                                 List<SemanticError> diagnostics,
                                 Scope globalScope,
                                 TacProgram tac,
+                                String mips,
                                 boolean parsedCleanly) {
 
     public List<SemanticError> errors() {

@@ -3,6 +3,7 @@ package com.uvg.compiscript.compiler;
 import com.uvg.compiscript.SyntaxErrorListener;
 import com.uvg.compiscript.codegen.CodeGenerator;
 import com.uvg.compiscript.codegen.TacProgram;
+import com.uvg.compiscript.mips.MipsGenerator;
 import com.uvg.compiscript.parser.CompiscriptLexer;
 import com.uvg.compiscript.parser.CompiscriptParser;
 import com.uvg.compiscript.semantic.SemanticAnalyzer;
@@ -23,7 +24,7 @@ import org.antlr.v4.runtime.tree.ParseTree;
 /**
  * Las fases en un solo lugar: lexer, parser, recoleccion de errores de
  * sintaxis, analisis semantico, distribucion de memoria y, si no hubo errores,
- * generacion de codigo intermedio.
+ * generacion de codigo intermedio y de MIPS.
  */
 public final class CompilerService {
 
@@ -59,7 +60,7 @@ public final class CompilerService {
         // Con el arbol mal formado el analisis semantico produce errores fantasma.
         if (listener.hasErrors()) {
             return new CompilationResult(origin, parser, tokens, tree,
-                    List.copyOf(diagnostics), null, null, false);
+                    List.copyOf(diagnostics), null, null, null, false);
         }
 
         SemanticAnalyzer analyzer = new SemanticAnalyzer();
@@ -70,8 +71,19 @@ public final class CompilerService {
                 .thenComparingInt(SemanticError::column));
 
         TacProgram tac = analyzer.hasErrors() ? null : generate(analyzer, tree, diagnostics);
+        String mips = tac == null ? null : assemble(tac, diagnostics);
         return new CompilationResult(origin, parser, tokens, tree,
-                List.copyOf(diagnostics), analyzer.getGlobalScope(), tac, true);
+                List.copyOf(diagnostics), analyzer.getGlobalScope(), tac, mips, true);
+    }
+
+    private static String assemble(TacProgram tac, List<SemanticError> diagnostics) {
+        try {
+            return new MipsGenerator(tac).generate();
+        } catch (RuntimeException bug) {
+            diagnostics.add(new SemanticError(1, 0, Category.GENERAL, Severity.ERROR,
+                    "error interno al generar MIPS: " + bug));
+            return null;
+        }
     }
 
     /** Un fallo del generador es un bug nuestro: se reporta como error y no tumba el CLI ni el IDE. */
