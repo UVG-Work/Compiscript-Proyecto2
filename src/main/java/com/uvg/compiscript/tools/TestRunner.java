@@ -2,6 +2,7 @@ package com.uvg.compiscript.tools;
 
 import com.uvg.compiscript.compiler.CompilationResult;
 import com.uvg.compiscript.compiler.CompilerService;
+import com.uvg.compiscript.mips.MarsRunner;
 import com.uvg.compiscript.semantic.SemanticError;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -32,16 +33,22 @@ import java.util.stream.Stream;
  * {@code .tac} del mismo nombre, y {@code @genera:} declara que construcciones
  * traduce. Un caso con errores no debe producir codigo intermedio.
  *
+ * <p>{@code @esperado: MIPS} genera el ensamblador, lo ejecuta en MARS y
+ * compara lo que imprime contra el {@code .out} del mismo nombre;
+ * {@code MIPS-ERROR} ademas exige que termine con un error en tiempo de
+ * ejecucion. {@code @mips:} declara que partes de la generacion ejercita.
+ *
  * <p>Al final imprime las matrices de cobertura: una regla o una construccion
  * sin cubrir es un fallo de la bateria, no un detalle.
  */
 public final class TestRunner {
 
-    private record Case(Path file, String expectation, Set<String> rules, Set<String> generated) {
+    private record Case(Path file, String expectation, Set<String> rules, Set<String> generated,
+                        Set<String> mips) {
     }
 
     private record Outcome(int syntaxErrors, int semanticErrors, List<String> messages,
-                           String tac) {
+                           String tac, String mips) {
     }
 
     private TestRunner() {
@@ -66,9 +73,11 @@ public final class TestRunner {
         Map<String, Set<String>> okBy = new TreeMap<>();
         Map<String, Set<String>> errBy = new TreeMap<>();
         Map<String, Set<String>> generatedBy = new TreeMap<>();
+        Map<String, Set<String>> mipsBy = new TreeMap<>();
         int passed = 0;
         int failed = 0;
         int withoutTac = 0;
+        int runtimeErrors = 0;
 
         for (Path file : files) {
             String name = directory.relativize(file).toString().replace('\\', '/');
@@ -86,7 +95,7 @@ public final class TestRunner {
             } catch (RuntimeException crash) {
                 // Un caso que tumba al compilador no debe abortar la bateria:
                 // se reporta como fallo y se sigue con los demas.
-                outcome = new Outcome(0, 0, List.of(crash.toString()), null);
+                outcome = new Outcome(0, 0, List.of(crash.toString()), null, null);
                 problem = "el compilador reviento: " + crash;
             }
             if (problem == null) {
@@ -95,6 +104,9 @@ public final class TestRunner {
                 if (testCase.expectation().startsWith("ERRORES")) {
                     withoutTac++;
                 }
+                if (testCase.expectation().equals("MIPS-ERROR")) {
+                    runtimeErrors++;
+                }
             } else {
                 out.printf("  FALLO    %-32s %s%n", name, problem);
                 outcome.messages().forEach(message -> out.println("             " + message));
@@ -102,7 +114,8 @@ public final class TestRunner {
             }
 
             boolean success = testCase.expectation().equals("OK")
-                    || testCase.expectation().equals("TAC");
+                    || testCase.expectation().equals("TAC")
+                    || testCase.expectation().startsWith("MIPS");
             Map<String, Set<String>> target = success ? okBy : errBy;
             for (String rule : testCase.rules()) {
                 target.computeIfAbsent(rule, key -> new LinkedHashSet<>()).add(name);
@@ -112,11 +125,17 @@ public final class TestRunner {
                     generatedBy.computeIfAbsent(construct, key -> new LinkedHashSet<>()).add(name);
                 }
             }
+            if (testCase.expectation().startsWith("MIPS")) {
+                for (String construct : testCase.mips()) {
+                    mipsBy.computeIfAbsent(construct, key -> new LinkedHashSet<>()).add(name);
+                }
+            }
         }
 
         out.printf("%n%d prueba(s) pasaron, %d fallaron%n", passed, failed);
         int uncovered = reportCoverage(out, okBy, errBy)
-                + reportGeneration(out, generatedBy, withoutTac);
+                + reportGeneration(out, generatedBy, withoutTac)
+                + reportMips(out, mipsBy, withoutTac, runtimeErrors);
         return failed == 0 && uncovered == 0 ? 0 : 1;
     }
 
@@ -188,10 +207,45 @@ public final class TestRunner {
         return gaps.size();
     }
 
+    /**
+     * Los casos fallidos de MIPS son de dos clases: los programas con errores
+     * de compilacion, que no deben producir ensamblador, y los que fallan al
+     * ejecutarse, que deben detenerse con el mensaje del error.
+     */
+    private static int reportMips(PrintStream out, Map<String, Set<String>> mipsBy,
+                                  int withoutCode, int runtimeErrors) {
+        out.println();
+        out.println("Cobertura de la generacion de MIPS (" + RuleCatalog.MIPS.size()
+                + " construcciones, ejecutadas en MARS):");
+        List<String> gaps = new ArrayList<>();
+        for (Map.Entry<String, String> construct : RuleCatalog.MIPS.entrySet()) {
+            boolean covered = mipsBy.containsKey(construct.getKey());
+            out.printf("  %-3s [%s]  %s%n", construct.getKey(), covered ? "run" : "-- ",
+                    construct.getValue());
+            if (!covered) {
+                gaps.add(construct.getKey() + " sin caso que ejecute su MIPS");
+            }
+        }
+        out.println("  casos fallidos: " + withoutCode
+                + " programa(s) con errores sin ensamblador, " + runtimeErrors
+                + " con error en tiempo de ejecucion");
+        if (runtimeErrors == 0) {
+            gaps.add("ningun caso de error en tiempo de ejecucion");
+        }
+        if (gaps.isEmpty()) {
+            out.println("  todas las construcciones tienen su caso");
+        } else {
+            out.println();
+            gaps.forEach(gap -> out.println("  HUECO: " + gap));
+        }
+        return gaps.size();
+    }
+
     private static String compare(Case testCase, Outcome outcome) throws IOException {
         String expected = testCase.expectation();
-        if (outcome.tac() != null && outcome.semanticErrors() + outcome.syntaxErrors() > 0) {
-            return "se genero codigo intermedio para un programa con errores";
+        if ((outcome.tac() != null || outcome.mips() != null)
+                && outcome.semanticErrors() + outcome.syntaxErrors() > 0) {
+            return "se genero codigo para un programa con errores";
         }
         if (expected.equals("SINTAXIS")) {
             return outcome.syntaxErrors() > 0 ? null
@@ -207,6 +261,9 @@ public final class TestRunner {
         if (expected.equals("TAC")) {
             return compareTac(testCase.file(), outcome);
         }
+        if (expected.startsWith("MIPS")) {
+            return runMips(testCase.file(), outcome, expected.equals("MIPS-ERROR"));
+        }
         int wanted = Integer.parseInt(expected.substring("ERRORES".length()).trim());
         return outcome.semanticErrors() == wanted ? null
                 : "se esperaban " + wanted + " error(es) y hubo " + outcome.semanticErrors();
@@ -220,14 +277,42 @@ public final class TestRunner {
         if (!Files.isRegularFile(golden)) {
             return "falta el TAC esperado " + golden.getFileName();
         }
-        String[] want = lines(Files.readString(golden));
-        String[] got = lines(outcome.tac());
+        return firstDifference(Files.readString(golden), outcome.tac(), "el TAC");
+    }
+
+    /** Un error en ejecucion termina con codigo 1; ensamblar mal o colgarse, con otro. */
+    private static String runMips(Path file, Outcome outcome, boolean runtimeError)
+            throws IOException {
+        if (outcome.semanticErrors() > 0) {
+            return "se esperaba MIPS y hubo " + outcome.semanticErrors() + " error(es)";
+        }
+        Path golden = Path.of(file.toString().replaceFirst("\\.cps$", ".out"));
+        if (!Files.isRegularFile(golden)) {
+            return "falta la salida esperada " + golden.getFileName();
+        }
+        MarsRunner.Run run;
+        try {
+            run = MarsRunner.run(outcome.mips());
+        } catch (IOException e) {
+            return "no se pudo ejecutar MARS: " + e.getMessage();
+        }
+        int wanted = runtimeError ? 1 : 0;
+        if (run.exitCode() != wanted) {
+            return "MARS termino con codigo " + run.exitCode() + " y se esperaba " + wanted
+                    + (run.messages().isBlank() ? "" : ": " + run.messages().strip());
+        }
+        return firstDifference(Files.readString(golden), run.output(), "la salida");
+    }
+
+    private static String firstDifference(String expected, String actual, String what) {
+        String[] want = lines(expected);
+        String[] got = lines(actual);
         for (int i = 0; i < Math.max(want.length, got.length); i++) {
             String a = i < want.length ? want[i] : "(fin)";
             String b = i < got.length ? got[i] : "(fin)";
             if (!a.equals(b)) {
-                return "el TAC difiere en la linea " + (i + 1) + ": se esperaba [" + a
-                        + "] y se genero [" + b + "]";
+                return what + " difiere en la linea " + (i + 1) + ": se esperaba [" + a
+                        + "] y se obtuvo [" + b + "]";
             }
         }
         return null;
@@ -241,6 +326,7 @@ public final class TestRunner {
         String expectation = null;
         Set<String> rules = new LinkedHashSet<>();
         Set<String> generated = new LinkedHashSet<>();
+        Set<String> mips = new LinkedHashSet<>();
         for (String line : Files.readAllLines(file)) {
             int expected = line.indexOf("@esperado:");
             if (expected >= 0) {
@@ -248,8 +334,9 @@ public final class TestRunner {
             }
             collectTags(line, "@regla:", rules);
             collectTags(line, "@genera:", generated);
+            collectTags(line, "@mips:", mips);
         }
-        return expectation == null ? null : new Case(file, expectation, rules, generated);
+        return expectation == null ? null : new Case(file, expectation, rules, generated, mips);
     }
 
     private static void collectTags(String line, String tag, Set<String> into) {
@@ -272,8 +359,8 @@ public final class TestRunner {
         }
         String tac = result.tac() == null ? null : result.tac().render();
         if (!result.parsedCleanly()) {
-            return new Outcome(result.syntaxErrors().size(), 0, messages, tac);
+            return new Outcome(result.syntaxErrors().size(), 0, messages, tac, result.mips());
         }
-        return new Outcome(0, result.errors().size(), messages, tac);
+        return new Outcome(0, result.errors().size(), messages, tac, result.mips());
     }
 }

@@ -89,6 +89,32 @@ public final class RuleCatalog {
         GENERATION.put("I24", "funciones como valor (llamada indirecta)");
     }
 
+    /** Lo que el enunciado de la fase 3 pide del codigo MIPS, mas lo que el lenguaje agrega. */
+    public static final Map<String, String> MIPS = new LinkedHashMap<>();
+
+    static {
+        MIPS.put("M01", "aritmetica entera, division y modulo");
+        MIPS.put("M02", "punto flotante en la FPU y conversion de integer");
+        MIPS.put("M03", "comparaciones y saltos condicionales");
+        MIPS.put("M04", "cortocircuito y ternario");
+        MIPS.put("M05", "bucles con break y continue");
+        MIPS.put("M06", "switch, con caida y sobre string");
+        MIPS.put("M07", "secuencia de llamada y retorno (argumentos en $a0-$a3)");
+        MIPS.put("M08", "mas de cuatro argumentos: paso por la pila");
+        MIPS.put("M09", "recursion simple y mutua");
+        MIPS.put("M10", "funciones anidadas por el enlace de acceso");
+        MIPS.put("M11", "funciones como valor (jalr)");
+        MIPS.put("M12", "objetos, constructor e inicializador");
+        MIPS.put("M13", "herencia y despacho por la tabla de metodos");
+        MIPS.put("M14", "listas con verificacion de rango");
+        MIPS.put("M15", "cadenas: concatenacion y comparacion por contenido");
+        MIPS.put("M16", "try/catch con desenrollado de la pila");
+        MIPS.put("M17", "error en tiempo de ejecucion sin manejador");
+        MIPS.put("M18", "getReg sin $t libre: derrame de temporales a la pila");
+        MIPS.put("M19", "getReg sin $s libre: derrame de variables a memoria");
+        MIPS.put("M20", "print de cada tipo");
+    }
+
     private RuleCatalog() {
     }
 
