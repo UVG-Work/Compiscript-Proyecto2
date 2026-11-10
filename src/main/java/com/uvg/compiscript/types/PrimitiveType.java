@@ -5,7 +5,7 @@ public final class PrimitiveType extends Type {
     public static final PrimitiveType INTEGER = new PrimitiveType("integer", 4);
     public static final PrimitiveType FLOAT = new PrimitiveType("float", 8);
     public static final PrimitiveType STRING = new PrimitiveType("string", 8);
-    public static final PrimitiveType BOOLEAN = new PrimitiveType("boolean", 1);
+    public static final PrimitiveType BOOLEAN = new PrimitiveType("boolean", 4);
     public static final PrimitiveType NULL = new PrimitiveType("null", 8);
     public static final PrimitiveType VOID = new PrimitiveType("void", 0);
 

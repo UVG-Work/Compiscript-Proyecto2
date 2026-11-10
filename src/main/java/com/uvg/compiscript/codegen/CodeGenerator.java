@@ -44,6 +44,9 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
     private final Deque<FunctionCode> stack = new ArrayDeque<>();
     private final Deque<String> breakTargets = new ArrayDeque<>();
     private final Deque<String> continueTargets = new ArrayDeque<>();
+    /** Cuantos try estaban abiertos al entrar a cada bucle o switch. */
+    private final Deque<Integer> breakTries = new ArrayDeque<>();
+    private final Deque<Integer> continueTries = new ArrayDeque<>();
     private int labels;
     private String comment;
 
@@ -99,7 +102,11 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
     }
 
     private void emit(String text) {
-        stack.peek().code.add(new Instruction(text, comment));
+        emit(text, null);
+    }
+
+    private void emit(String text, Type type) {
+        stack.peek().code.add(new Instruction(text, comment, type));
         comment = null;
     }
 
@@ -182,7 +189,7 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
     @Override
     public String visitPrintStatement(CompiscriptParser.PrintStatementContext ctx) {
         String value = visit(ctx.expression());
-        emit("print " + value);
+        emit("print " + value, notes.type(ctx.expression()));
         free(value);
         return null;
     }
@@ -196,10 +203,12 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
     @Override
     public String visitReturnStatement(CompiscriptParser.ReturnStatementContext ctx) {
         if (ctx.expression() == null) {
+            closeTries(0);
             emit("return");
             return null;
         }
         String value = value(ctx.expression(), stack.peek().symbol.getReturnType());
+        closeTries(0);
         emit("return " + value);
         free(value);
         return null;
@@ -294,10 +303,24 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
 
     private void loopBody(ParseTree body, String exit, String next) {
         breakTargets.push(exit);
+        breakTries.push(stack.peek().openTries);
         continueTargets.push(next);
+        continueTries.push(stack.peek().openTries);
         visit(body);
+        continueTries.pop();
         continueTargets.pop();
+        breakTries.pop();
         breakTargets.pop();
+    }
+
+    /**
+     * Salir de un try con break, continue o return tambien lo cierra: si no,
+     * su manejador seguiria activo y atraparia un error de afuera.
+     */
+    private void closeTries(int depth) {
+        for (int i = stack.peek().openTries; i > depth; i--) {
+            emit("endtry");
+        }
     }
 
     /**
@@ -320,7 +343,7 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
             String target = newLabel();
             targets.add(target);
             String label = value(switchCase.expression(), selectorType);
-            emit("if " + selector + " == " + label + " goto " + target);
+            emit("if " + selector + " == " + label + " goto " + target, selectorType);
             free(label);
         }
         free(selector);
@@ -329,6 +352,7 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         emit("goto " + (fallback != null ? fallback : end));
 
         breakTargets.push(end);
+        breakTries.push(stack.peek().openTries);
         for (int i = 0; i < targets.size(); i++) {
             mark(targets.get(i));
             ctx.switchCase(i).statement().forEach(this::visit);
@@ -337,6 +361,7 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
             mark(fallback);
             ctx.defaultCase().statement().forEach(this::visit);
         }
+        breakTries.pop();
         breakTargets.pop();
         mark(end);
         return null;
@@ -344,12 +369,14 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
 
     @Override
     public String visitBreakStatement(CompiscriptParser.BreakStatementContext ctx) {
+        closeTries(breakTries.peek());
         emit("goto " + breakTargets.peek());
         return null;
     }
 
     @Override
     public String visitContinueStatement(CompiscriptParser.ContinueStatementContext ctx) {
+        closeTries(continueTries.peek());
         emit("goto " + continueTargets.peek());
         return null;
     }
@@ -393,7 +420,9 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         String handler = newLabel();
         String end = newLabel();
         emit("try " + handler + ", " + notes.symbol(ctx).getAddress());
+        stack.peek().openTries++;
         visit(ctx.block(0));
+        stack.peek().openTries--;
         emit("endtry");
         emit("goto " + end);
         mark(handler);
@@ -710,9 +739,9 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         String left = visit(parts.get(0));
         Type leftType = notes.type(parts.get(0));
         for (int i = 1; i < parts.size(); i++) {
-            String[] pair = numericPair(left, leftType,
-                    visit(parts.get(i)), notes.type(parts.get(i)));
-            left = binary(pair[0], operator(ctx, i), pair[1]);
+            Type rightType = notes.type(parts.get(i));
+            String[] pair = numericPair(left, leftType, visit(parts.get(i)), rightType);
+            left = binary(pair[0], operator(ctx, i), pair[1], operandType(leftType, rightType));
             leftType = PrimitiveType.BOOLEAN;
         }
         return left;
@@ -747,19 +776,24 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
                 continue;
             }
             String[] pair = numericPair(left, leftType, right, rightType);
-            left = binary(pair[0], operator(ctx, i), pair[1]);
-            leftType = leftType == PrimitiveType.FLOAT || rightType == PrimitiveType.FLOAT
-                    ? PrimitiveType.FLOAT : PrimitiveType.INTEGER;
+            leftType = operandType(leftType, rightType);
+            left = binary(pair[0], operator(ctx, i), pair[1], leftType);
         }
         return left;
     }
 
-    private String binary(String left, String operator, String right) {
+    private String binary(String left, String operator, String right, Type type) {
         free(left);
         free(right);
         String temp = temp();
-        emit(temp + " = " + left + " " + operator + " " + right);
+        emit(temp + " = " + left + " " + operator + " " + right, type);
         return temp;
+    }
+
+    /** El tipo en que se opera: si uno es float, el otro ya se promovio. */
+    private static Type operandType(Type left, Type right) {
+        return left == PrimitiveType.FLOAT || right == PrimitiveType.FLOAT
+                ? PrimitiveType.FLOAT : left;
     }
 
     @Override
@@ -775,7 +809,7 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         String operand = visit(ctx.unaryExpr());
         free(operand);
         String temp = temp();
-        emit(temp + " = " + operator + " " + operand);
+        emit(temp + " = " + operator + " " + operand, notes.type(ctx.unaryExpr()));
         return temp;
     }
 
@@ -927,7 +961,7 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         free(base);
         free(offset);
         String temp = temp();
-        emit(temp + " = " + base + "[" + offset + "]");
+        emit(temp + " = " + base + "[" + offset + "]", type);
         return temp;
     }
 
@@ -936,7 +970,7 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         String base = toTemp(array);
         String offset = elementOffset(visit(index.expression()), type.getElementType());
         String stored = value(value, type.getElementType());
-        emit(base + "[" + offset + "] = " + stored);
+        emit(base + "[" + offset + "] = " + stored, type);
         free(base);
         free(offset);
         return stored;
@@ -1099,12 +1133,13 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
             }
             return;
         }
-        String test = comparison(node);
+        Instruction test = comparison(node);
         if (test == null) {
-            test = visit(node);
-            free(test);
+            String value = visit(node);
+            free(value);
+            test = new Instruction(value, null);
         }
-        emit((when ? "if " : "ifFalse ") + test + " goto " + target);
+        emit((when ? "if " : "ifFalse ") + test.text() + " goto " + target, test.type());
     }
 
     /**
@@ -1127,7 +1162,7 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
     }
 
     /** {@code a < b} cabe entero en un salto condicional: {@code if a < b goto L}. */
-    private String comparison(ParseTree node) {
+    private Instruction comparison(ParseTree node) {
         List<? extends ParserRuleContext> parts;
         if (node instanceof CompiscriptParser.EqualityExprContext equality
                 && equality.relationalExpr().size() == 2) {
@@ -1140,10 +1175,13 @@ public final class CodeGenerator extends CompiscriptBaseVisitor<String> {
         }
         String left = visit(parts.get(0));
         String right = visit(parts.get(1));
-        String[] pair = numericPair(left, notes.type(parts.get(0)), right, notes.type(parts.get(1)));
+        Type leftType = notes.type(parts.get(0));
+        Type rightType = notes.type(parts.get(1));
+        String[] pair = numericPair(left, leftType, right, rightType);
         free(pair[0]);
         free(pair[1]);
-        return pair[0] + " " + operator((ParserRuleContext) node, 1) + " " + pair[1];
+        return new Instruction(pair[0] + " " + operator((ParserRuleContext) node, 1) + " "
+                + pair[1], null, operandType(leftType, rightType));
     }
 
     // ------------------------------------------------------------------

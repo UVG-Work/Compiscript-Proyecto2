@@ -26,9 +26,9 @@ L3:
 L1:
     t1 = false
 L2:
-    G[25] = t1
+    G[28] = t1
     t1 = G[4] == G[8]               ; let igual: boolean = a == b;
-    G[26] = t1
+    G[32] = t1
     t1 = G[4] + G[8]                ; c = c * (a + b);
     t1 = G[12] * t1
     G[12] = t1
@@ -36,6 +36,6 @@ L2:
     print G[16]                     ; print(d);
     print G[20]                     ; print(e);
     print G[24]                     ; print(mayor);
-    print G[25]                     ; print(rango);
-    print G[26]                     ; print(igual);
+    print G[28]                     ; print(rango);
+    print G[32]                     ; print(igual);
 endfunc

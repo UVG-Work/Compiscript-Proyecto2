@@ -26,6 +26,18 @@ public final class TacProgram {
         this.global = global;
     }
 
+    public List<FunctionCode> functions() {
+        return List.copyOf(functions);
+    }
+
+    public List<ClassSymbol> classes() {
+        return List.copyOf(classes);
+    }
+
+    public int globalSize() {
+        return storageOf(global).stream().mapToInt(Symbol::getSize).sum();
+    }
+
     public String render() {
         StringBuilder out = new StringBuilder();
         for (ClassSymbol type : classes) {
@@ -65,8 +77,7 @@ public final class TacProgram {
     public String recordsText() {
         StringBuilder out = new StringBuilder();
         List<Symbol> globals = storageOf(global);
-        int globalSize = globals.stream().mapToInt(Symbol::getSize).sum();
-        out.append("Area estatica G (").append(globalSize).append(" bytes)\n");
+        out.append("Area estatica G (").append(globalSize()).append(" bytes)\n");
         globals.forEach(symbol -> row(out, symbol.getAddress(), symbol.getName(),
                 String.valueOf(symbol.getType()), "global"));
 
@@ -77,7 +88,7 @@ public final class TacProgram {
             row(out, "fp[8]", "", "", "enlace de acceso");
             row(out, "fp[16]", "", "", "direccion de retorno");
             row(out, "fp[24]", "", "", "valor de retorno");
-            int tempsStart = MemoryLayout.FRAME_HEADER;
+            int tempsStart = function.tempsStart();
             FunctionSymbol symbol = function.symbol;
             if (symbol != null) {
                 if (symbol.isMethod()) {
@@ -88,7 +99,6 @@ public final class TacProgram {
                     row(out, local.getAddress(), local.getName(), String.valueOf(local.getType()),
                             local instanceof ParameterSymbol ? "parametro" : "local");
                 }
-                tempsStart = symbol.getLocalsEnd();
             }
             for (int i = 0; i < function.temps.count(); i++) {
                 row(out, "fp[" + (tempsStart + i * MemoryLayout.WORD) + "]", "t" + (i + 1), "",

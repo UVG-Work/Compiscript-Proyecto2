@@ -63,7 +63,7 @@ func main$2, 32
     return 1                        ; return 1;
 endfunc
 
-func elegir, 41
+func elegir, 44
     ifFalse fp[32] goto L1
     link fp                         ; return h();
     t1 = call elegir.h, 0
