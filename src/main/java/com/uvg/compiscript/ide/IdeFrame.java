@@ -2,6 +2,7 @@ package com.uvg.compiscript.ide;
 
 import com.uvg.compiscript.compiler.CompilationResult;
 import com.uvg.compiscript.compiler.CompilerService;
+import com.uvg.compiscript.mips.MarsRunner;
 import com.uvg.compiscript.semantic.SemanticError;
 import com.uvg.compiscript.tools.TestRunner;
 import java.awt.BorderLayout;
@@ -29,12 +30,14 @@ import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.KeyStroke;
+import javax.swing.SwingWorker;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 /**
  * Ventana del IDE: editor a la izquierda, arbol / tabla de simbolos / tokens a
  * la derecha, y diagnosticos y salida abajo. Cubre el "Funcionamiento del
- * programa" del enunciado, incluida la ejecucion de la bateria de pruebas.
+ * programa" del enunciado: compilar hasta MIPS, ejecutarlo en MARS y correr la
+ * bateria de pruebas.
  */
 public class IdeFrame extends JFrame {
 
@@ -56,6 +59,8 @@ public class IdeFrame extends JFrame {
             "Compila con F5 un programa sin errores para generar su TAC.");
     private final TacPanel recordsPanel = new TacPanel("Sin registros de activacion",
             "Se calculan al generar el codigo intermedio.");
+    private final TacPanel mipsPanel = new TacPanel("Sin codigo MIPS",
+            "Compila con F5 un programa sin errores; F7 lo ejecuta en MARS.");
     private final DiagnosticsPanel diagnosticsPanel;
     private final JTextArea console = new JTextArea(8, 80);
     private final JTabbedPane bottom = new JTabbedPane();
@@ -86,6 +91,7 @@ public class IdeFrame extends JFrame {
         views.addTab("Tokens", tokensPanel);
         views.addTab("Codigo intermedio", tacPanel);
         views.addTab("Registros de activacion", recordsPanel);
+        views.addTab("MIPS", mipsPanel);
 
         bottom.setFont(IdeTheme.UI);
         bottom.addTab("Errores", diagnosticsPanel);
@@ -123,11 +129,13 @@ public class IdeFrame extends JFrame {
         JButton open = IdeTheme.button("Abrir", "Abrir un archivo .cps");
         JButton save = IdeTheme.button("Guardar", "Guardar el archivo actual");
         JButton compile = IdeTheme.primaryButton("Compilar", "Analizar el programa (F5)");
+        JButton run = IdeTheme.button("Ejecutar", "Compilar y ejecutar el MIPS en MARS (F7)");
         JButton tests = IdeTheme.button("Bateria", "Correr la bateria de pruebas (F6)");
 
         open.addActionListener(e -> abrir());
         save.addActionListener(e -> guardar());
         compile.addActionListener(e -> compilar());
+        run.addActionListener(e -> ejecutar());
         tests.addActionListener(e -> ejecutarPruebas());
 
         JPanel bar = IdeTheme.strip();
@@ -138,6 +146,8 @@ public class IdeFrame extends JFrame {
         bar.add(save);
         bar.add(Box.createHorizontalStrut(14));
         bar.add(compile);
+        bar.add(Box.createHorizontalStrut(4));
+        bar.add(run);
         bar.add(Box.createHorizontalStrut(4));
         bar.add(tests);
         bar.add(Box.createHorizontalStrut(14));
@@ -177,6 +187,10 @@ public class IdeFrame extends JFrame {
         compile.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0));
         compile.addActionListener(e -> compilar());
         build.add(compile);
+        JMenuItem run = new JMenuItem("Ejecutar en MARS");
+        run.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F7, 0));
+        run.addActionListener(e -> ejecutar());
+        build.add(run);
         JMenuItem tests = new JMenuItem("Ejecutar bateria de pruebas");
         tests.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F6, 0));
         tests.addActionListener(e -> ejecutarPruebas());
@@ -206,6 +220,9 @@ public class IdeFrame extends JFrame {
         treePanel.clear();
         symbolsPanel.setRoot(null);
         tokensPanel.setTokens(null);
+        tacPanel.setText(null);
+        recordsPanel.setText(null);
+        mipsPanel.setText(null);
         setStatus("Archivo nuevo. Compila con F5.", IdeTheme.MUTED);
     }
 
@@ -258,7 +275,7 @@ public class IdeFrame extends JFrame {
         guardar();
     }
 
-    private void compilar() {
+    private CompilationResult compilar() {
         String origin = currentFile != null ? currentFile.toString() : "(sin guardar)";
         CompilationResult result = CompilerService.compile(editor.getSource(), origin);
 
@@ -269,6 +286,7 @@ public class IdeFrame extends JFrame {
         symbolsPanel.setRoot(result.globalScope());
         tacPanel.setText(result.tac() == null ? null : result.tac().render());
         recordsPanel.setText(result.tac() == null ? null : result.tac().recordsText());
+        mipsPanel.setText(result.mips());
 
         int errors = result.errors().size();
         int warnings = result.warnings().size();
@@ -278,10 +296,10 @@ public class IdeFrame extends JFrame {
                     IdeTheme.ERROR);
             bottom.setSelectedIndex(0);
         } else if (warnings > 0) {
-            setStatus("Sin errores, codigo intermedio generado. " + warnings
+            setStatus("Sin errores, TAC y MIPS generados. " + warnings
                     + " advertencia(s).", IdeTheme.WARN);
         } else {
-            setStatus("Sin errores ni advertencias. Codigo intermedio generado.", IdeTheme.OK);
+            setStatus("Sin errores ni advertencias. TAC y MIPS generados.", IdeTheme.OK);
         }
 
         console.append("=== " + origin + " ===\n");
@@ -293,6 +311,43 @@ public class IdeFrame extends JFrame {
         }
         console.append(errors + " error(es), " + warnings + " advertencia(s)\n\n");
         console.setCaretPosition(console.getDocument().getLength());
+        return result;
+    }
+
+    /** MARS corre en otro proceso; se espera en segundo plano para no congelar la ventana. */
+    private void ejecutar() {
+        CompilationResult result = compilar();
+        if (result.mips() == null) {
+            return;
+        }
+        setStatus("Ejecutando en MARS...", IdeTheme.MUTED);
+        bottom.setSelectedIndex(1);
+        new SwingWorker<MarsRunner.Run, Void>() {
+            @Override
+            protected MarsRunner.Run doInBackground() throws IOException {
+                return MarsRunner.run(result.mips());
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    MarsRunner.Run run = get();
+                    console.append("--- salida de MARS ---\n" + run.output());
+                    if (!run.messages().isBlank()) {
+                        console.append(run.messages());
+                    }
+                    console.append("--- codigo de salida " + run.exitCode() + " ---\n\n");
+                    setStatus(run.ok() ? "Ejecucion terminada sin errores."
+                            : "La ejecucion termino con error (codigo " + run.exitCode() + ").",
+                            run.ok() ? IdeTheme.OK : IdeTheme.ERROR);
+                } catch (Exception e) {
+                    Throwable cause = e.getCause() != null ? e.getCause() : e;
+                    console.append("No se pudo ejecutar MARS: " + cause.getMessage() + "\n\n");
+                    setStatus("No se pudo ejecutar MARS.", IdeTheme.ERROR);
+                }
+                console.setCaretPosition(console.getDocument().getLength());
+            }
+        }.execute();
     }
 
     /** El enunciado pide que el usuario pueda correr la bateria desde el IDE. */

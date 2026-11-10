@@ -3,6 +3,7 @@ package com.uvg.compiscript;
 import com.uvg.compiscript.compiler.CompilationResult;
 import com.uvg.compiscript.compiler.CompilerService;
 import com.uvg.compiscript.ide.IdeApp;
+import com.uvg.compiscript.mips.MarsRunner;
 import com.uvg.compiscript.parser.CompiscriptLexer;
 import com.uvg.compiscript.parser.CompiscriptParser;
 import com.uvg.compiscript.semantic.SemanticError;
@@ -20,6 +21,7 @@ import org.antlr.v4.runtime.tree.Trees;
  * Driver de linea de comandos.
  *
  *   java -jar compiscript.jar programa.cps [--tree] [--tokens] [--dot] [--quiet] [--tac]
+ *   java -jar compiscript.jar programa.cps --mips | --run
  *   java -jar compiscript.jar --test tests
  *   java -jar compiscript.jar --ide
  *
@@ -38,7 +40,9 @@ public class Main {
               --tokens   imprime la secuencia de tokens del lexer
               --dot      exporta el arbol a .dot y, si hay graphviz, a .png
               --quiet    no imprime la tabla de simbolos ni los registros de activacion
-              --tac      imprime solo el codigo intermedio""";
+              --tac      imprime solo el codigo intermedio
+              --mips     imprime solo el ensamblador MIPS
+              --run      genera el MIPS y lo ejecuta en MARS""";
 
     public static void main(String[] args) throws IOException {
         String file = null;
@@ -49,10 +53,14 @@ public class Main {
         boolean quiet = false;
         boolean ide = false;
         boolean tacOnly = false;
+        boolean mipsOnly = false;
+        boolean run = false;
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "--tac" -> tacOnly = true;
+                case "--mips" -> mipsOnly = true;
+                case "--run" -> run = true;
                 case "--tree" -> showTree = true;
                 case "--tokens" -> showTokens = true;
                 case "--dot" -> exportDot = true;
@@ -92,6 +100,9 @@ public class Main {
         if (tacOnly) {
             System.exit(printTac(file));
         }
+        if (mipsOnly || run) {
+            System.exit(mips(file, run));
+        }
         System.out.println("=== " + file + " ===");
         System.exit(analyze(file, showTree, showTokens, exportDot, quiet));
     }
@@ -105,6 +116,29 @@ public class Main {
         }
         System.out.print(result.tac().render());
         return 0;
+    }
+
+    /**
+     * El ensamblador va a stdout para poder redirigirlo a un .asm. Con
+     * {@code --run} se ejecuta en MARS y se imprime lo que imprimio el
+     * programa; un error en tiempo de ejecucion devuelve 1.
+     */
+    private static int mips(String file, boolean run) throws IOException {
+        CompilationResult result = CompilerService.compileFile(Path.of(file));
+        if (result.hasErrors()) {
+            result.errors().forEach(error -> System.err.println("  " + error));
+            return 1;
+        }
+        if (!run) {
+            System.out.print(result.mips());
+            return 0;
+        }
+        MarsRunner.Run execution = MarsRunner.run(result.mips());
+        System.out.print(execution.output());
+        if (!execution.messages().isBlank()) {
+            System.err.print(execution.messages());
+        }
+        return execution.ok() ? 0 : 1;
     }
 
     /** @return 0 si el archivo esta limpio, 1 si tiene errores. */
