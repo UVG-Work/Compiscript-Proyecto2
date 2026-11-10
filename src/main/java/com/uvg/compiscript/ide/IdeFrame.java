@@ -358,20 +358,38 @@ public class IdeFrame extends JFrame {
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
             return;
         }
+        Path directory = chooser.getSelectedFile().toPath();
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        try (PrintStream out = new PrintStream(buffer, true, StandardCharsets.UTF_8)) {
-            int code = TestRunner.run(chooser.getSelectedFile().toPath(), out);
-            setStatus(code == 0
-                    ? "Bateria: todas las pruebas pasan; reglas y construcciones cubiertas."
-                    : "Bateria: hay pruebas en rojo o casos sin cubrir. Mira la salida.",
-                    code == 0 ? IdeTheme.OK : IdeTheme.ERROR);
-        } catch (IOException e) {
-            setStatus("No se pudo correr la bateria: " + e.getMessage(), IdeTheme.ERROR);
-        }
-        console.append(buffer.toString(StandardCharsets.UTF_8));
-        console.append("\n");
-        console.setCaretPosition(console.getDocument().getLength());
+        setStatus("Corriendo la bateria (los casos de MIPS se ejecutan en MARS)...",
+                IdeTheme.MUTED);
         bottom.setSelectedIndex(1);
+        // Cada caso de MIPS lanza MARS: en el hilo de la interfaz la ventana se congelaria.
+        new SwingWorker<Integer, Void>() {
+            @Override
+            protected Integer doInBackground() throws IOException {
+                try (PrintStream out = new PrintStream(buffer, true, StandardCharsets.UTF_8)) {
+                    return TestRunner.run(directory, out);
+                }
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    int code = get();
+                    setStatus(code == 0
+                            ? "Bateria: todas las pruebas pasan; reglas y construcciones cubiertas."
+                            : "Bateria: hay pruebas en rojo o casos sin cubrir. Mira la salida.",
+                            code == 0 ? IdeTheme.OK : IdeTheme.ERROR);
+                } catch (Exception e) {
+                    Throwable cause = e.getCause() != null ? e.getCause() : e;
+                    setStatus("No se pudo correr la bateria: " + cause.getMessage(),
+                            IdeTheme.ERROR);
+                }
+                console.append(buffer.toString(StandardCharsets.UTF_8));
+                console.append("\n");
+                console.setCaretPosition(console.getDocument().getLength());
+            }
+        }.execute();
     }
 
     private void setStatus(String message, Color color) {
